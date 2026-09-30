@@ -2,12 +2,13 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useState } from "react";
 import { db } from "@/db/db";
-import SubTabs from "@/components/SubTabs";
 import { weeklySchedule, nextClassAcrossWeek, formatCountdown, formatTime12, todayName, timeToMinutes, cn } from "@/lib/utils";
 
 export default function SchedulePage() {
   const courses = useLiveQuery(() => db.courses.toArray()) ?? [];
   const semesters = useLiveQuery(() => db.semesters.toArray()) ?? [];
+  const settings = useLiveQuery(() => db.settings.toCollection().first());
+  const weekStartsOn = settings?.weekStartsOn ?? 0;
   const currentSemester = semesters.find((s) => s.isCurrent);
   const activeCourses = courses.filter((c) => c.semesterId === currentSemester?.id);
 
@@ -21,7 +22,7 @@ export default function SchedulePage() {
   const now = new Date();
   const today = todayName(now);
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
-  const { order, map } = weeklySchedule(activeCourses);
+  const { order, map } = weeklySchedule(activeCourses, weekStartsOn);
   const next = nextClassAcrossWeek(activeCourses, now);
 
   const currentClass = (map.get(today) ?? []).find(
@@ -29,14 +30,8 @@ export default function SchedulePage() {
   );
 
   return (
-    <div className="px-4 pt-4 space-y-4">
-      <h1 className="text-2xl font-bold">Planner</h1>
-      <SubTabs tabs={[
-        { href: "/planner/routine", label: "Routine" },
-        { href: "/planner/tasks", label: "Tasks" },
-        { href: "/planner/exams", label: "Exams" },
-        { href: "/planner/schedule", label: "Schedule" },
-      ]} />
+    <div className="space-y-4">
+      <h1 className="text-2xl font-bold">Weekly schedule</h1>
 
       {currentClass ? (
         <div className="card p-4 bg-good/10 border-good/30">

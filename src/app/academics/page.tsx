@@ -1,181 +1,92 @@
 "use client";
-import { useLiveQuery } from "dexie-react-hooks";
-import { useState } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
-import { ChevronRight, RefreshCcw } from "lucide-react";
+import { useMemo } from "react";
+import { BookOpen, Calculator, GraduationCap, Map, RefreshCcw, UserCheck, ChevronRight } from "lucide-react";
+import { useSettings } from "@/hooks/useSettings";
+import { useCourses } from "@/hooks/useCourses";
+import { useAttendance } from "@/hooks/useAttendance";
 import { db } from "@/db/db";
-import { calculateGPA, calculateSemesterGPA, requiredFutureGPA } from "@/lib/gpa";
+import { useLiveQuery } from "dexie-react-hooks";
 import { getAcademicProfile, getSemesterCreditBreakdown } from "@/lib/academicProfile";
-import { Grade } from "@/types";
-import StatCard from "@/components/StatCard";
+import { buildTimeline } from "@/lib/degree";
+import { calculateSemesterGPA } from "@/lib/gpa";
+import { EmptyState, PageHeader, PageSkeleton, Progress, Section, Stat, Badge } from "@/components/ui";
+import SemesterTimeline from "@/components/academic/SemesterTimeline";
+import { useQuickAdd } from "@/components/shell/QuickAdd";
 
-const GRADES: Grade[] = ["A", "A-", "B+", "B", "B-", "C+", "C", "C-", "D+", "D", "F"];
+export default function AcademicsOverview() {
+  const { settings } = useSettings();
+  const { courses, semesters, currentSemester, currentCourses, loading } = useCourses();
+  const att = useAttendance(currentCourses, settings?.attendanceThreshold ?? 70);
+  const planned = useLiveQuery(() => db.plannedCourses.toArray());
+  const quick = useQuickAdd();
 
-export default function AcademicsPage() {
-  const settings = useLiveQuery(() => db.settings.toCollection().first());
-  const courses = useLiveQuery(() => db.courses.toArray()) ?? [];
-  const semesters = useLiveQuery(() => db.semesters.toArray()) ?? [];
+  const timeline = useMemo(() => (settings && planned ? buildTimeline(semesters, courses, planned, settings) : []), [settings, semesters, courses, planned]);
 
-  const [whatIf, setWhatIf] = useState<Record<number, Grade>>({});
-  const [target, setTarget] = useState<number | null>(null);
-  const [remaining, setRemaining] = useState<number | null>(null);
-
-  if (!settings) return null;
-
+  if (loading || !settings || !planned) return <PageSkeleton />;
   const profile = getAcademicProfile(settings);
+  const credit = getSemesterCreditBreakdown(profile, currentCourses, currentSemester?.registeredCredits ?? 0);
+  const semGpa = currentSemester?.id && currentCourses.some((c) => c.gpaCounting && c.grade) ? calculateSemesterGPA(courses, currentSemester.id, settings.gradeScale, settings).gpa : null;
+  const pct = profile.degreeCredits ? (profile.completedCredits / profile.degreeCredits) * 100 : 0;
+  const risky = currentCourses.filter((c) => ["risk", "warning"].includes(att.stats.get(c.id!)?.status ?? ""));
 
-  const currentSemester = semesters.find((s) => s.isCurrent);
-  const activeCourses = courses.filter((c) => c.semesterId === currentSemester?.id);
-  const inProgress = activeCourses.filter((c) => c.status === "In Progress" && c.gpaCounting);
-  const creditBreakdown = getSemesterCreditBreakdown(profile, activeCourses, currentSemester?.registeredCredits ?? 0);
-
-  const simulatedCourses = courses.map((c) =>
-    whatIf[c.id!] ? { ...c, grade: whatIf[c.id!], status: "Completed" as const } : c
-  );
-  const simulatedCGPA = calculateGPA(simulatedCourses, settings.gradeScale, settings);
-  const simulatedSemGPA = currentSemester?.id
-    ? calculateSemesterGPA(simulatedCourses, currentSemester.id, settings.gradeScale, settings)
-    : { gpa: 0 };
-  const hasSimulation = Object.keys(whatIf).length > 0;
-
-  const targetVal = target ?? settings.targetCGPA ?? 3.5;
-  const remainingVal = remaining ?? profile.remainingCredits;
-  const req = requiredFutureGPA(profile.officialCGPA, profile.completedCredits, targetVal, remainingVal);
+  const links = [
+    { href: "/academics/courses", label: "Courses", icon: BookOpen, hint: `${currentCourses.length} this semester` },
+    { href: "/academics/gpa", label: "GPA / CGPA", icon: Calculator, hint: "Scenarios & targets" },
+    { href: "/academics/attendance", label: "Attendance", icon: UserCheck, hint: risky.length ? `${risky.length} need attention` : "Track every class" },
+    { href: "/academics/retakes", label: "Retakes", icon: RefreshCcw, hint: "Improve past grades" },
+    { href: "/academics/degree", label: "Degree Planner", icon: Map, hint: "Plan future semesters" },
+  ];
 
   return (
-    <div className="px-4 pt-4 space-y-6">
-      <h1 className="text-2xl font-bold">Academics</h1>
+    <div className="space-y-6">
+      <PageHeader title="Academics" subtitle={currentSemester ? `${currentSemester.label} · Semester ${profile.semesterNumber}` : "Your academic overview"} />
 
-      <div className="grid grid-cols-2 gap-3">
-        <StatCard label="Official CGPA" value={profile.officialCGPA} delay={0} />
-        <StatCard label="Completed Credits" value={profile.completedCredits} decimals={0} delay={0.05} />
-      </div>
-      <p className="text-xs text-ink-faint -mt-4">
-        This is your official, verified transcript CGPA — it's a stored fact, not recalculated from your course
-        rows, so it can't drift because of a blank grade or a duplicate record.
-      </p>
-
-      <div className="grid grid-cols-2 gap-3">
-        <Link href="/academics/courses" className="card flex items-center justify-between p-4">
-          <span className="font-medium">Courses</span><ChevronRight size={16} className="text-ink-faint" />
-        </Link>
-        <Link href="/academics/retakes" className="card flex items-center justify-between p-4">
-          <span className="font-medium">Retakes</span><ChevronRight size={16} className="text-ink-faint" />
-        </Link>
-      </div>
-
-      {/* Current-semester credit breakdown (PART 20) */}
-      {currentSemester && (
-        <section className="card p-4 space-y-2">
-          <h2 className="font-semibold">{currentSemester.label} Load</h2>
-          <div className="grid grid-cols-3 gap-2 text-center">
-            <div className="rounded-xl bg-surface-sunken/50 p-2.5">
-              <p className="text-lg font-bold">{creditBreakdown.registeredCredits}</p>
-              <p className="text-[10px] text-ink-faint">Registered</p>
-            </div>
-            <div className="rounded-xl bg-warn/10 p-2.5">
-              <p className="text-lg font-bold text-warn">{creditBreakdown.retakeCredits}</p>
-              <p className="text-[10px] text-ink-faint">Retake</p>
-            </div>
-            <div className="rounded-xl bg-good/10 p-2.5">
-              <p className="text-lg font-bold text-good">{creditBreakdown.newDegreeCredits}</p>
-              <p className="text-[10px] text-ink-faint">New degree credits</p>
-            </div>
+      {semesters.length === 0 ? (
+        <div className="card"><EmptyState icon={GraduationCap} title="No semester yet" message="Add your current semester to start tracking courses, attendance and GPA." action={<button className="btn btn-primary" onClick={() => quick.open("semester")}>Add semester</button>} /></div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <Stat label="CGPA" value={profile.officialCGPA > 0 ? profile.officialCGPA.toFixed(2) : "—"} hint={settings.targetCGPA ? `Target ${settings.targetCGPA.toFixed(2)}` : undefined} />
+            <Stat label="Semester GPA" value={semGpa === null ? "—" : semGpa.toFixed(2)} hint={semGpa === null ? "No grades yet" : currentSemester?.label} />
+            <Stat label="Credits done" value={profile.completedCredits} hint={`of ${profile.degreeCredits}`} />
+            <Stat label="Remaining" value={profile.remainingCredits} hint={credit.newDegreeCredits ? `${credit.remainingCreditsAfter} after this semester` : undefined} />
           </div>
-          <p className="text-xs text-ink-faint">
-            Retake credits already counted toward your {profile.completedCredits} completed credits aren't counted
-            twice. If this semester finishes as registered, completed credits become{" "}
-            <span className="font-semibold text-ink">{creditBreakdown.completedCreditsAfter}</span> and remaining
-            drops to <span className="font-semibold text-ink">{creditBreakdown.remainingCreditsAfter}</span>.
-          </p>
-        </section>
+
+          <div className="card p-4">
+            <div className="mb-2 flex items-center justify-between"><p className="text-sm font-semibold">Degree progress</p><span className="text-sm tabular text-ink-muted">{pct.toFixed(0)}%</span></div>
+            <Progress value={pct} label="Degree progress" />
+            <p className="mt-2 text-xs text-ink-muted">Your official CGPA and completed credits are stored values from your transcript — edit them in Settings.</p>
+          </div>
+
+          {risky.length > 0 && (
+            <div className="card divide-y divide-border">
+              {risky.map((c) => { const a = att.stats.get(c.id!)!; return (
+                <Link key={c.id} href="/academics/attendance" className="row-link">
+                  <span className="text-sm font-medium">{c.code} attendance</span>
+                  <span className="flex items-center gap-2"><span className="text-sm font-semibold tabular">{a.percentage!.toFixed(0)}%</span><Badge tone={a.status === "risk" ? "bad" : "warn"}>{a.status === "risk" ? "At risk" : "Close"}</Badge></span>
+                </Link>); })}
+            </div>
+          )}
+        </>
       )}
 
-      {/* Target CGPA */}
-      <section className="card p-4 space-y-3">
-        <h2 className="font-semibold">CGPA Goal</h2>
-        <div className="grid grid-cols-2 gap-3">
-          <label className="text-xs text-ink-muted">
-            Target CGPA
-            <input
-              type="number" step="0.01" min={0} max={4}
-              defaultValue={targetVal}
-              onChange={(e) => setTarget(parseFloat(e.target.value) || 0)}
-              className="mt-1 w-full rounded-lg border border-border bg-surface-sunken/50 px-3 py-2 text-ink"
-            />
-          </label>
-          <label className="text-xs text-ink-muted">
-            Remaining credits
-            <input
-              type="number" min={0}
-              defaultValue={remainingVal}
-              onChange={(e) => setRemaining(parseInt(e.target.value) || 0)}
-              className="mt-1 w-full rounded-lg border border-border bg-surface-sunken/50 px-3 py-2 text-ink"
-            />
-          </label>
-        </div>
-        <div className="rounded-xl bg-surface-sunken/50 p-3">
-          {req.achievable ? (
-            <p className="text-sm">
-              You need an average GPA of <span className="font-bold text-accent">{req.required.toFixed(2)}</span> across your
-              remaining {remainingVal} credits to reach {targetVal.toFixed(2)} CGPA.
-            </p>
-          ) : (
-            <p className="text-sm text-bad">
-              A {targetVal.toFixed(2)} CGPA is not mathematically achievable with only {remainingVal} credits remaining
-              (would require {req.required.toFixed(2)} GPA, above the 4.00 max). Try a lower target or more remaining credits.
-            </p>
-          )}
-        </div>
-      </section>
-
-      {/* Semester Projection (what-if) calculator */}
-      <section className="card p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="font-semibold">Semester Projection</h2>
-          {hasSimulation && (
-            <button onClick={() => setWhatIf({})} className="flex items-center gap-1 text-xs text-accent">
-              <RefreshCcw size={12} /> Reset
-            </button>
-          )}
-        </div>
-        <p className="text-xs text-ink-faint">
-          Simulate grades for your current in-progress courses. This never changes your Official CGPA above —
-          only you editing a grade on a course page does that.
-        </p>
-        <div className="space-y-2">
-          {inProgress.map((c) => (
-            <div key={c.id} className="flex items-center justify-between">
-              <span className="text-sm">{c.code}</span>
-              <select
-                value={whatIf[c.id!] ?? ""}
-                onChange={(e) => setWhatIf((prev) => ({ ...prev, [c.id!]: e.target.value as Grade }))}
-                className="rounded-lg border border-border bg-surface-sunken/50 px-2 py-1 text-sm"
-              >
-                <option value="">—</option>
-                {GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
-              </select>
-            </div>
+      <Section title="Explore">
+        <div className="card divide-y divide-border overflow-hidden">
+          {links.map((l) => (
+            <Link key={l.href} href={l.href} className="row-link">
+              <span className="flex items-center gap-3"><l.icon size={18} className="text-accent" aria-hidden="true" /><span><span className="block text-sm font-medium">{l.label}</span><span className="block text-xs text-ink-muted">{l.hint}</span></span></span>
+              <ChevronRight size={16} className="text-ink-faint" aria-hidden="true" />
+            </Link>
           ))}
-          {inProgress.length === 0 && <p className="text-sm text-ink-faint">No in-progress courses to simulate.</p>}
         </div>
-        {hasSimulation && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }}
-            className="grid grid-cols-2 gap-3"
-          >
-            <div className="rounded-xl bg-accent-soft p-3 text-center">
-              <p className="text-xs text-ink-muted">Projected Semester GPA</p>
-              <p className="text-2xl font-bold text-accent">{simulatedSemGPA.gpa.toFixed(2)}</p>
-            </div>
-            <div className="rounded-xl bg-accent-soft p-3 text-center">
-              <p className="text-xs text-ink-muted">Projected CGPA</p>
-              <p className="text-2xl font-bold text-accent">{simulatedCGPA.gpa.toFixed(2)}</p>
-            </div>
-          </motion.div>
-        )}
-      </section>
+      </Section>
+
+      {timeline.length > 0 && (
+        <Section title="Academic journey" action={<Link href="/academics/degree" className="text-xs font-medium text-accent">Plan ahead</Link>}>
+          <SemesterTimeline entries={timeline} />
+        </Section>
+      )}
     </div>
   );
 }

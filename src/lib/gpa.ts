@@ -1,4 +1,4 @@
-import { Course, Grade, Semester, AppSettings } from "@/types";
+import { Course, Grade, AppSettings } from "@/types";
 
 export interface GpaResult {
   gpa: number;

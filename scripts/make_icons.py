@@ -27,7 +27,7 @@ def make_icon(size, path):
         font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", int(size*0.5))
     except Exception:
         font = ImageFont.load_default()
-    text = "N"
+    text = "S"
     bbox = draw2.textbbox((0,0), text, font=font)
     tw, th = bbox[2]-bbox[0], bbox[3]-bbox[1]
     draw2.text(((size-tw)/2 - bbox[0], (size-th)/2 - bbox[1] - size*0.02), text, fill="white", font=font)

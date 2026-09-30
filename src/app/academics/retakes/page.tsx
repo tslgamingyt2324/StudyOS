@@ -1,7 +1,6 @@
 "use client";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/db/db";
-import { DEFAULT_GRADE_SCALE } from "@/types";
 import { gradeColor } from "@/lib/gpa";
 
 export default function RetakesPage() {
@@ -18,7 +17,7 @@ export default function RetakesPage() {
   const plannedRetakes = courses.filter((c) => !c.isRetake && c.retakeTargetGrade && !retakes.some((r) => r.originalCourseId === c.id));
 
   return (
-    <div className="px-4 pt-4 space-y-6">
+    <div className="space-y-6">
       <h1 className="text-2xl font-bold">Retakes</h1>
 
       <section className="card p-4 space-y-3">

@@ -1,66 +1,63 @@
-# Naffiz OS — Personal Academic & Life Management System
+# StudyOS
 
-A local-first PWA for Naffiz, CSE @ North South University. Built with Next.js 14,
-TypeScript, Tailwind CSS, Framer Motion, and Dexie (IndexedDB) — no backend required.
+A premium, local-first **student operating system** for university students. One connected system:
 
-## Run it locally
+**Academics → Courses → Attendance → Calendar → Tasks → Exams → Study → Notes → Goals → Analytics → Degree progress**
+
+Everything is stored in your browser (IndexedDB). There are no accounts, no servers, no analytics and no external API calls.
+
+## Run it
 
 ```bash
 npm install
-npm run dev
+npm run dev          # http://localhost:3000
+npm run build && npm start   # production
 ```
-Open http://localhost:3000 — your real Spring/Summer/Fall 2026 courses are seeded
-automatically on first launch and persist in IndexedDB from then on (survives refresh,
-closing the browser, and reopening).
 
-## Get it installed on your iPhone Home Screen (real PWA)
+Requires Node 18.17+ (developed on Node 22).
 
-A `claude.ai` link cannot host a Next.js app with a working service worker —
-it needs to be actually deployed. The fastest free path:
+| Script | What it does |
+|---|---|
+| `npm run typecheck` | TypeScript, no emit |
+| `npm test` | 29 unit tests for the pure logic in `src/lib` (attendance, goals, stats, dates, reminders, calendar, GPA, degree, backup, markdown) |
+| `npm run test:ui` | 66 jsdom tests: every page against an empty *and* a populated database, plus create/edit/delete, timer, calendar, backup/restore and legacy-migration flows |
 
-1. Push this folder to a GitHub repo.
-2. Go to vercel.com → "New Project" → import the repo → Deploy (zero config needed).
-3. On your iPhone, open the deployed URL in **Safari** (must be Safari, not Chrome).
-4. Tap the Share icon → **Add to Home Screen**.
-5. Launch "Naffiz OS" from your Home Screen — it now runs full-screen, offline-capable,
-   with the service worker caching the app shell.
-6. For push-style reminders, iOS requires the app to be installed this way *and*
-   for you to grant notification permission from inside the installed app — Phase 2
-   will wire up the actual notification scheduling logic.
+## What's inside
 
-## What's implemented in Phase 1
+| Area | Pages |
+|---|---|
+| Home | **Dashboard** — customisable command center (show/hide/reorder widgets, saved locally) |
+| Academics | Overview · Courses · **Course command center** · GPA/CGPA · **Attendance** · Retakes · **Degree planner** |
+| Planner | **Calendar** (month/week/day, drag to reschedule) · Tasks · Exams · Routine · Schedule |
+| Study | Timer · **Focus mode** · Sessions · Analytics · **Goals** (+ milestones) |
+| Knowledge | **Notes** (Markdown, pin, archive, tags, course links) |
+| System | Settings · validated JSON backup/restore · type-`RESET` to erase |
 
-- **Data model & persistence**: Dexie/IndexedDB schema for Semesters, Courses, Routine
-  items, Tasks, Study Sessions, Settings. Nothing is lost on refresh.
-- **Your real academic record**, seeded exactly as you gave it: Spring 2026 (CSE115,
-  CSE115L, ENG102, MAT116), Summer 2026 (CSE173, ENG103, POL101, SOC101), Fall 2026
-  in-progress (BIO103, CHE101, CSE115 retake, CSE115L retake) — including your actual
-  faculty codes, sections, rooms, and schedules.
-- **CGPA/retake engine**: per-course `gpaCounting` / `degreeCredit` / `isRetake` flags
-  (nothing assumed), configurable retake-replacement and credit-counting rules,
-  editable grade scale, Target CGPA required-GPA calculator, live What-If simulator.
-- **Dashboard**: animated CGPA/GPA/credits/streak cards, today's real class schedule
-  with automatic conflict detection (checked against your actual Fall 2026 timetable),
-  upcoming deadlines, and a transparent rule-based Academic Health panel (no fake AI).
-- **Courses & Retakes**: full course detail pages (editable grade/flags/notes),
-  dedicated retake comparison view (original vs. retake attempt).
-- **Daily Routine**: add/edit/delete/complete, category-colored timeline, day-of-week
-  recurrence.
-- **Tasks/Assignments**: deadlines with live countdown + overdue detection, priority,
-  course linking.
-- **Study Timer**: Pomodoro/25-5/50-10/Custom modes, animated ring, real session
-  logging tied to courses, recent-session history.
-- **Settings**: theme (light/dark/system, properly designed dark surfaces — not
-  inverted colors), editable grade scale, retake rules, attendance threshold,
-  full JSON export/import backup, and app reset.
-- **PWA foundation**: manifest, generated app icons, service worker with offline
-  app-shell caching, safe-area-aware layout, bottom nav + floating quick-add sheet.
+Global: **Ctrl/⌘+K** search across courses, tasks, exams, notes, sessions, goals and events · **Quick add** for 10 kinds of item · reminders · achievements.
 
-## Phase 2 (next)
-Quizzes/Exams tracker, Attendance system, full Calendar (month/week/day), Study/CGPA
-analytics with charts, real notification scheduling, Goals, Notes with search,
-Achievements. Say the word and I'll continue straight from this codebase.
+## Key rules worth knowing
 
-## Data & privacy
-Everything lives only in your browser's IndexedDB. No login, no cloud sync, no NSU/
-Canvas/portal credentials are stored or requested anywhere in this app.
+- **Attendance** = present ÷ (present + absent). *Excused* classes are excluded from both sides (they neither help nor hurt). Each course can override the default required %, and can carry a starting count for classes held before you began logging.
+- **Goals** derive progress from your data (study hours from sessions, CGPA from your profile, course grade, attendance, completed tasks); only "custom" goals are typed by hand.
+- **Insights** are plain rules over your own data — no AI. Behavioural claims (peak day/time, trends) are withheld until there are ≥ 8 sessions on ≥ 4 days.
+- **Dates** are bucketed by your *local* day (the pre-2.0 code used UTC days, which mis-filed late-night sessions and streaks outside UTC).
+- **GPA/CGPA/retake calculations are unchanged.** Your official CGPA and completed credits remain stored transcript values (Settings → Academic record).
+
+## Data
+
+- Database `studyos-db` (Dexie, schema v4). New in v4: `attendance`, `notes`, `goals`, `calendarEvents`, `plannedCourses`, `achievements`; new indexes on `tasks` (`examId`). Existing tables were not altered.
+- **Upgrading from the previous app version:** on first launch StudyOS copies the old database (`naffiz-os-db`, the identifier the pre-2.0 app used) into `studyos-db` — read-only, in one transaction. The old database is left untouched as a safety net; "Reset StudyOS" removes both.
+- Backup format `studyos-backup` v2. Older backups (no `format` field) still import; anything invalid is rejected *before* any data is touched, and a restore is atomic.
+- The old hard-coded "self-heal" that re-imposed one student's schedule at every launch was removed; fresh installs start empty.
+
+## Reminders
+
+Class, deadline, exam and study-goal reminders (Settings) fire while StudyOS is open or installed and running, at most once each per day — as system notifications if you grant permission, otherwise as in-app toasts. Web apps cannot schedule notifications for when they are fully closed.
+
+## PWA
+
+Installable (`manifest.json`, icons, shortcuts). The service worker precaches every main route and caches assets network-first, so visited pages work offline; all data is local regardless. Course detail pages (`/academics/courses/:id`) are cached after first visit.
+
+## Stack
+
+Next.js 14 (App Router) · React 18 · TypeScript · Tailwind CSS · Dexie/IndexedDB · Framer Motion · Lucide. No chart or editor libraries — charts and the Markdown renderer are small in-repo components.

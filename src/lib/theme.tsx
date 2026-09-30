@@ -17,6 +17,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  // Mirror the choice into localStorage so the inline script in layout.tsx can
+  // apply it before first paint next time.
+  useEffect(() => {
+    try { localStorage.setItem("studyos:theme", theme); } catch { /* blocked storage */ }
+  }, [theme]);
+
   useEffect(() => {
     const root = document.documentElement;
     const apply = () => {

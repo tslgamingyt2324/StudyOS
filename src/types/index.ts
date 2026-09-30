@@ -1,5 +1,5 @@
 // ==========================================================================
-// Naffiz OS — core data model
+// StudyOS — core data model
 // Every table in Dexie maps 1:1 to one of these interfaces.
 // ==========================================================================
 
@@ -43,6 +43,11 @@ export interface Course {
   retakePlannedSemester?: string;
 
   notes?: string;
+
+  // v4 — attendance (optional; absent on rows created before v4)
+  attendanceBaseline?: AttendanceBaseline;
+  requiredAttendance?: number; // overrides settings.attendanceThreshold for this course
+  targetGrade?: Grade; // course goal grade for any course (not only retakes)
 }
 
 export interface ClassSchedule {
@@ -78,6 +83,8 @@ export interface Task {
   actualMinutes?: number;
   createdAt: string;
   completedAt?: string;
+  tags?: string[]; // v4
+  examId?: number; // v4 — links a prep task to an exam
 }
 
 export type StudyType =
@@ -100,6 +107,9 @@ export interface StudySession {
    *  because a Course Study session can also be logged with "No course"
    *  selected; only THIS flag means "deliberately unassigned, no setup". */
   isQuickStudy?: boolean;
+  /** v4 — optional feedback from the completion screen. */
+  rating?: "Difficult" | "Okay" | "Good" | "Excellent";
+  accomplished?: string;
 }
 
 /** Single-row table (id is always 1) holding the currently running/paused
@@ -133,9 +143,10 @@ export interface Exam {
   targetMarks?: number;
   actualMarks?: number;
   notes?: string;
+  location?: string; // v4
 }
 
-export interface AppSettings {
+export interface AppSettings extends SettingsExtras {
   id?: number;
   userName: string;
   university: string;
@@ -157,7 +168,7 @@ export interface AppSettings {
 
   // --------------------------------------------------------------------
   // AUTHORITATIVE ACADEMIC PROFILE — single source of truth.
-  // These three fields are verified against Naffiz's official NSU transcript
+  // These three fields come from the student's official transcript
   // and must NEVER be derived by recalculating from `courses` rows. Every
   // screen that shows "Official CGPA" / "Completed Credits" / remaining
   // degree credits reads these three values (see src/lib/academicProfile.ts).
@@ -182,3 +193,119 @@ export const DEFAULT_GRADE_SCALE: Record<Grade, number> = {
   "A": 4.0, "A-": 3.7, "B+": 3.3, "B": 3.0, "B-": 2.7,
   "C+": 2.3, "C": 2.0, "C-": 1.7, "D+": 1.3, "D": 1.0, "F": 0.0, "": 0,
 };
+
+// ==========================================================================
+// StudyOS 2.0 additions — all additive; no existing field was changed.
+// ==========================================================================
+
+export type AttendanceStatus = "Present" | "Absent" | "Excused";
+
+export interface AttendanceRecord {
+  id?: number;
+  courseId: number;
+  date: string; // YYYY-MM-DD (local)
+  status: AttendanceStatus;
+  note?: string;
+}
+
+/** Optional per-course attendance data stored on the Course row. */
+export interface AttendanceBaseline {
+  present: number;
+  absent: number;
+  excused: number;
+}
+
+export interface Note {
+  id?: number;
+  title: string;
+  body: string;
+  courseId?: number;
+  tags: string[];
+  pinned: boolean;
+  archived: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type GoalType = "Academic" | "Study" | "Course" | "Personal";
+export type GoalMetric =
+  | "cgpa" | "study_hours" | "course_grade" | "attendance" | "tasks_completed" | "manual";
+export type GoalStatus = "Active" | "Completed" | "Abandoned";
+
+export interface Goal {
+  id?: number;
+  title: string;
+  description?: string;
+  type: GoalType;
+  metric: GoalMetric;
+  target: number; // cgpa / hours / grade points / % / count / manual target
+  startValue?: number; // baseline for cgpa goals
+  manualCurrent?: number; // only used when metric === "manual"
+  unit?: string; // display unit for manual goals
+  courseId?: number;
+  startDate: string; // YYYY-MM-DD
+  deadline?: string; // YYYY-MM-DD
+  status: GoalStatus;
+  createdAt: string;
+  completedAt?: string;
+}
+
+export type CalendarEventKind = "General" | "Study" | "Class" | "Personal";
+
+export interface CalendarEvent {
+  id?: number;
+  title: string;
+  description?: string;
+  kind: CalendarEventKind;
+  courseId?: number;
+  location?: string;
+  date: string; // YYYY-MM-DD (local)
+  startTime?: string; // HH:MM — omitted for all-day
+  endTime?: string;
+  allDay: boolean;
+}
+
+export interface PlannedCourse {
+  id?: number;
+  term: SemesterTerm;
+  year: number;
+  code: string;
+  title: string;
+  credits: number;
+  isRetake?: boolean;
+  expectedGrade?: Grade;
+}
+
+export interface AchievementUnlock {
+  key: string; // primary key
+  unlockedAt: string;
+}
+
+export type DashboardWidgetId =
+  | "alerts" | "today" | "studyGoal" | "academic" | "deadlines" | "exams"
+  | "attendance" | "goals" | "notes" | "degree" | "insights";
+
+export interface DashboardLayout {
+  order: DashboardWidgetId[];
+  hidden: DashboardWidgetId[];
+}
+
+export const DEFAULT_DASHBOARD_ORDER: DashboardWidgetId[] = [
+  "alerts", "today", "studyGoal", "academic", "deadlines", "exams",
+  "attendance", "goals", "degree", "notes", "insights",
+];
+
+/** Extra settings fields added in v4 — all optional so old rows stay valid. */
+export interface SettingsExtras {
+  dashboardLayout?: DashboardLayout;
+  creditsPerSemester?: number; // default load used for graduation estimates
+  classReminderMinutes?: number; // lead time for "class starts in N minutes"
+  studyReminderHour?: number; // local hour after which the goal reminder may fire
+  weekStartsOn?: number; // 0 = Sunday … 6 = Saturday (calendar only)
+}
+
+/** Session feedback captured on the completion screen (all optional). */
+export interface SessionFeedback {
+  rating?: "Difficult" | "Okay" | "Good" | "Excellent";
+  accomplished?: string;
+}

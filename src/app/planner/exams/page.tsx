@@ -1,120 +1,93 @@
 "use client";
-import { useLiveQuery } from "dexie-react-hooks";
-import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { useMemo, useState } from "react";
+import { ClipboardList, MapPin, Play, Plus, ListPlus } from "lucide-react";
 import { db } from "@/db/db";
-import { Exam, ExamType } from "@/types";
-import { deadlineLabel, cn } from "@/lib/utils";
-import SubTabs from "@/components/SubTabs";
-
-const EXAM_TYPES: ExamType[] = ["Quiz", "Midterm", "Final", "Other"];
+import { useExams } from "@/hooks/useExams";
+import { useCourses } from "@/hooks/useCourses";
+import { useTasks } from "@/hooks/useTasks";
+import { useStudySessions } from "@/hooks/useStudy";
+import { useQuickAdd } from "@/components/shell/QuickAdd";
+import { Badge, EmptyState, PageHeader, PageSkeleton, Progress, Section } from "@/components/ui";
+import ExamForm from "@/components/forms/ExamForm";
+import { Exam } from "@/types";
+import { cn, formatTime12 } from "@/lib/utils";
+import { addDays, dateKey, formatMinutes, longDate } from "@/lib/dates";
+import { sessionsBetween, sumMinutes } from "@/lib/stats";
 
 export default function ExamsPage() {
-  const exams = useLiveQuery(() => db.exams.orderBy("date").toArray()) ?? [];
-  const courses = useLiveQuery(() => db.courses.toArray()) ?? [];
-  const [showForm, setShowForm] = useState(false);
-  const [draft, setDraft] = useState<Partial<Exam>>({ examType: "Quiz", preparationPct: 0 });
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { loading, upcoming, past, daysUntil } = useExams();
+  const { byId } = useCourses();
+  const { tasks } = useTasks();
+  const { sessions } = useStudySessions();
+  const quick = useQuickAdd();
+  const [editing, setEditing] = useState<Exam | "new" | null>(null);
 
-  const addExam = async () => {
-    setError(null);
-    if (!draft.title) { setError("Give the exam a title."); return; }
-    if (!draft.courseId) { setError("Pick a course."); return; }
-    if (!draft.date) { setError("Pick a date."); return; }
-    setSubmitting(true);
-    try {
-      await db.exams.add({
-        courseId: draft.courseId!, title: draft.title!, examType: draft.examType as ExamType,
-        date: draft.date!, time: draft.time, topics: draft.topics, preparationPct: draft.preparationPct ?? 0,
-        targetMarks: draft.targetMarks,
-      });
-      setShowForm(false);
-      setDraft({ examType: "Quiz", preparationPct: 0 });
-    } finally {
-      setSubmitting(false);
-    }
+  const weekMinutes = useMemo(() => {
+    const now = new Date();
+    return (courseId: number) => sumMinutes(sessionsBetween(sessions.filter((s) => s.courseId === courseId), dateKey(addDays(now, -6)), dateKey(now)));
+  }, [sessions]);
+
+  if (loading) return <PageSkeleton />;
+
+  const renderCard = (e: Exam, isPast?: boolean) => {
+    const days = daysUntil(e.date);
+    const course = byId(e.courseId);
+    const prep = tasks.filter((t) => t.examId === e.id);
+    const openPrep = prep.filter((t) => t.status !== "Completed").length;
+    const remaining = 100 - e.preparationPct;
+    const tone = days <= 2 ? "bad" : days <= 7 ? "warn" : "accent";
+    return (
+      <li key={e.id} className="card p-4">
+        <div className="flex items-start justify-between gap-3">
+          <button className="min-w-0 text-left" onClick={() => setEditing(e)} aria-label={`Edit ${course?.code} ${e.title}`}>
+            <p className="flex flex-wrap items-center gap-1.5 font-semibold">{course?.code ?? "Course"} · {e.title} <Badge>{e.examType}</Badge></p>
+            <p className="mt-0.5 text-xs text-ink-muted">{longDate(e.date)}{e.time ? ` · ${formatTime12(e.time)}` : ""}</p>
+            {e.location && <p className="flex items-center gap-1 text-xs text-ink-muted"><MapPin size={11} aria-hidden="true" />{e.location}</p>}
+            {e.topics && <p className="mt-1 text-xs text-ink-muted">Topics: {e.topics}</p>}
+          </button>
+          <div className="shrink-0 text-right">
+            {isPast ? <Badge>{e.actualMarks !== undefined ? `Scored ${e.actualMarks}${e.targetMarks ? ` / ${e.targetMarks}` : ""}` : "Completed"}</Badge> : (
+              <>
+                <p className={cn("text-2xl font-bold tabular", days <= 2 ? "text-bad" : days <= 7 ? "text-warn" : "")}>{days === 0 ? "Today" : days === 1 ? "1" : days}</p>
+                <p className="text-[11px] text-ink-muted">{days === 0 ? "" : days === 1 ? "day remaining" : "days remaining"}</p>
+              </>
+            )}
+          </div>
+        </div>
+        {!isPast && (
+          <div className="mt-3 space-y-2">
+            <div className="flex items-center justify-between text-xs"><span className="text-ink-muted">Preparation</span><span className="font-semibold tabular">{e.preparationPct}%</span></div>
+            <input type="range" min={0} max={100} step={5} value={e.preparationPct} aria-label={`${course?.code} ${e.title} preparation`}
+              onChange={(ev) => db.exams.update(e.id!, { preparationPct: Number(ev.target.value) })} className="w-full accent-[rgb(var(--accent))]" />
+            <Progress value={e.preparationPct} tone={tone} thin label="Preparation" />
+            <p className="text-xs text-ink-muted">
+              {remaining === 0 ? "You're fully prepared." : days <= 0 ? `${remaining}% still to cover.` : `${remaining}% to go in ${days} day${days === 1 ? "" : "s"} — about ${Math.max(1, Math.ceil(remaining / days))}% per day.`}
+              {e.courseId ? ` · ${formatMinutes(weekMinutes(e.courseId))} studied on ${course?.code} this week.` : ""}
+              {prep.length > 0 ? ` · ${openPrep} of ${prep.length} prep task${prep.length === 1 ? "" : "s"} open.` : ""}
+            </p>
+            <div className="flex flex-wrap gap-2 pt-1">
+              <Link href={`/study/timer?course=${e.courseId}&type=Exam%20Preparation`} className="btn btn-secondary btn-sm"><Play size={13} /> Study now</Link>
+              <button className="btn btn-ghost btn-sm" onClick={() => quick.open("task", { task: { courseId: e.courseId, examId: e.id, title: `Prepare for ${e.title}` } })}><ListPlus size={13} /> Add prep task</button>
+            </div>
+          </div>
+        )}
+      </li>
+    );
   };
 
   return (
-    <div className="px-4 pt-4 space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Planner</h1>
-        <button onClick={() => setShowForm(true)} className="flex items-center gap-1 rounded-full bg-accent px-3 py-1.5 text-sm text-white"><Plus size={16} /> Add</button>
-      </div>
-      <SubTabs tabs={[
-        { href: "/planner/routine", label: "Routine" },
-        { href: "/planner/tasks", label: "Tasks" },
-        { href: "/planner/exams", label: "Exams" },
-        { href: "/planner/schedule", label: "Schedule" },
-      ]} />
-
-      <div className="space-y-2">
-        {exams.length === 0 && <p className="py-8 text-center text-sm text-ink-faint">No exams tracked yet. Add your first quiz or midterm.</p>}
-        {exams.map((e) => {
-          const c = courses.find((cc) => cc.id === e.courseId);
-          const dl = deadlineLabel(e.date);
-          const color = dl.urgency === "overdue" ? "text-bad" : dl.urgency === "today" || dl.urgency === "soon" ? "text-warn" : "text-ink-faint";
-          return (
-            <div key={e.id} className="card p-4 space-y-2">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-semibold text-sm">{c?.code} · {e.title}</p>
-                  <p className="text-xs text-ink-faint">{e.examType}{e.time && ` · ${e.time}`}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className={cn("text-xs font-semibold", color)}>{dl.label}</span>
-                  <button onClick={() => db.exams.delete(e.id!)} className="text-ink-faint"><Trash2 size={15} /></button>
-                </div>
-              </div>
-              <div className="space-y-1">
-                <div className="flex items-center justify-between text-[11px] text-ink-faint">
-                  <span>Preparation</span><span>{e.preparationPct}%</span>
-                </div>
-                <input
-                  type="range" min={0} max={100} value={e.preparationPct}
-                  onChange={(ev) => db.exams.update(e.id!, { preparationPct: parseInt(ev.target.value) })}
-                  className="w-full accent-accent"
-                />
-              </div>
-              {e.topics && <p className="text-xs text-ink-faint">Topics: {e.topics}</p>}
-            </div>
-          );
-        })}
-      </div>
-
-      <AnimatePresence>
-        {showForm && (
-          <>
-            <motion.div className="fixed inset-0 z-50 bg-black/40" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowForm(false)} />
-            <motion.div
-              className="fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl card p-5 space-y-3"
-              style={{ paddingBottom: "calc(2rem + env(safe-area-inset-bottom, 0px))" }}
-              initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ type: "spring", damping: 30, stiffness: 300 }}
-            >
-              <h3 className="text-lg font-semibold">New Exam</h3>
-              <select value={draft.courseId ?? ""} onChange={(e) => setDraft((p) => ({ ...p, courseId: e.target.value ? Number(e.target.value) : undefined }))} className="w-full rounded-lg border border-border bg-surface-sunken/50 px-3 py-2">
-                <option value="">Select course</option>
-                {courses.map((c) => <option key={c.id} value={c.id}>{c.code}</option>)}
-              </select>
-              <input placeholder="Title (e.g. Quiz 1, Midterm)" value={draft.title ?? ""} onChange={(e) => setDraft((p) => ({ ...p, title: e.target.value }))} className="w-full rounded-lg border border-border bg-surface-sunken/50 px-3 py-2" />
-              <select value={draft.examType} onChange={(e) => setDraft((p) => ({ ...p, examType: e.target.value as ExamType }))} className="w-full rounded-lg border border-border bg-surface-sunken/50 px-3 py-2">
-                {EXAM_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
-              <div className="flex gap-2">
-                <input type="date" value={draft.date ?? ""} onChange={(e) => setDraft((p) => ({ ...p, date: e.target.value }))} className="flex-1 rounded-lg border border-border bg-surface-sunken/50 px-3 py-2" />
-                <input type="time" value={draft.time ?? ""} onChange={(e) => setDraft((p) => ({ ...p, time: e.target.value }))} className="flex-1 rounded-lg border border-border bg-surface-sunken/50 px-3 py-2" />
-              </div>
-              <input placeholder="Topics (optional)" value={draft.topics ?? ""} onChange={(e) => setDraft((p) => ({ ...p, topics: e.target.value }))} className="w-full rounded-lg border border-border bg-surface-sunken/50 px-3 py-2" />
-              {error && <p className="text-xs text-bad">{error}</p>}
-              <button disabled={submitting} onClick={addExam} className="w-full rounded-xl bg-accent py-3 font-semibold text-white disabled:opacity-60">
-                {submitting ? "Saving…" : "Add Exam"}
-              </button>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+    <div className="space-y-6">
+      <PageHeader title="Exams" subtitle={upcoming.length ? `${upcoming.length} upcoming` : undefined} actions={<button className="btn btn-primary" onClick={() => setEditing("new")}><Plus size={16} /> Add exam</button>} />
+      {upcoming.length + past.length === 0 ? (
+        <div className="card"><EmptyState icon={ClipboardList} title="No exams yet" message="Add quizzes, midterms and finals to get countdowns, calendar entries and study planning." action={<button className="btn btn-primary" onClick={() => setEditing("new")}>Add exam</button>} /></div>
+      ) : (
+        <>
+          <Section title="Upcoming">{upcoming.length === 0 ? <p className="text-sm text-ink-muted">No upcoming exams.</p> : <ul className="grid gap-3 md:grid-cols-2">{upcoming.map((e) => renderCard(e))}</ul>}</Section>
+          {past.length > 0 && <Section title="Past"><ul className="grid gap-3 md:grid-cols-2">{past.map((e) => renderCard(e, true))}</ul></Section>}
+        </>
+      )}
+      {editing && <ExamForm open initial={editing === "new" ? undefined : editing} onClose={() => setEditing(null)} />}
     </div>
   );
 }

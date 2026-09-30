@@ -1,15 +1,24 @@
 {
-  "name": "Naffiz OS — Personal Academic & Life Management",
-  "short_name": "Naffiz OS",
-  "description": "Personal academic and life management system for Naffiz, CSE @ NSU.",
+  "name": "StudyOS — Student Operating System",
+  "short_name": "StudyOS",
+  "description": "A local-first student operating system: courses, attendance, planner, study timer, notes, goals and degree progress.",
+  "id": "/",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#000000",
-  "theme_color": "#000000",
-  "orientation": "portrait",
+  "orientation": "any",
+  "background_color": "#f2f2f7",
+  "theme_color": "#0a6ce0",
+  "categories": ["education", "productivity"],
   "icons": [
     { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" }
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Study timer", "url": "/study/timer", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Calendar", "url": "/planner/calendar", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Tasks", "url": "/planner/tasks", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
   ]
 }

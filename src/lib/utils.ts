@@ -1,4 +1,5 @@
 import { Course, ClassSchedule, Task } from "@/types";
+import { daysBetween, dueInstant } from "@/lib/dates";
 
 export function cn(...classes: (string | false | undefined | null)[]) {
   return classes.filter(Boolean).join(" ");
@@ -89,10 +90,9 @@ export function todaysClasses(courses: Course[], date = new Date()) {
   return items.sort((a, b) => timeToMinutes(a.sched.startTime) - timeToMinutes(b.sched.startTime));
 }
 
-const WEEK_ORDER = ["Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
-
-/** Groups every scheduled class by day of week, Saturday-first (NSU's academic week), each day sorted by start time. */
-export function weeklySchedule(courses: Course[]) {
+/** Groups every scheduled class by day of week, starting on `weekStartsOn` (0 = Sunday), each day sorted by start time. */
+export function weeklySchedule(courses: Course[], weekStartsOn = 0) {
+  const WEEK_ORDER = Array.from({ length: 7 }, (_, i) => DAY_NAMES[(i + weekStartsOn) % 7]);
   const map = new Map<string, { course: Course; sched: ClassSchedule }[]>();
   for (const day of WEEK_ORDER) map.set(day, []);
   for (const c of courses) {
@@ -134,23 +134,27 @@ export function formatCountdown(minutes: number): string {
   return m ? `${h}h ${m}m` : `${h}h`;
 }
 
-export function deadlineLabel(deadline?: string): { label: string; urgency: "overdue" | "today" | "soon" | "later" | "none" } {
-  if (!deadline) return { label: "No deadline", urgency: "none" };
-  const now = new Date();
-  const due = new Date(deadline);
-  const diffMs = due.getTime() - now.getTime();
-  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+export type Urgency = "overdue" | "today" | "soon" | "later" | "none";
 
-  if (diffMs < 0) return { label: "Overdue", urgency: "overdue" };
-  if (diffDays === 0) return { label: "Due today", urgency: "today" };
-  if (diffDays === 1) return { label: "Due tomorrow", urgency: "soon" };
-  if (diffDays <= 5) return { label: `${diffDays} days left`, urgency: "soon" };
-  return { label: `${diffDays} days left`, urgency: "later" };
+/**
+ * Human label + urgency for a task deadline or exam date. Uses CALENDAR days
+ * (not 24-hour blocks), so anything due later today reads "Due today" and
+ * anything due tomorrow reads "Due tomorrow".
+ */
+export function deadlineLabel(deadline?: string, now = new Date()): { label: string; urgency: Urgency } {
+  if (!deadline) return { label: "No deadline", urgency: "none" };
+  const due = dueInstant(deadline);
+  if (due.getTime() < now.getTime()) return { label: "Overdue", urgency: "overdue" };
+  const days = daysBetween(now, due);
+  if (days === 0) return { label: "Due today", urgency: "today" };
+  if (days === 1) return { label: "Due tomorrow", urgency: "soon" };
+  if (days <= 5) return { label: `${days} days left`, urgency: "soon" };
+  return { label: `${days} days left`, urgency: "later" };
 }
 
-export function isOverdue(task: Task): boolean {
+export function isOverdue(task: Task, now = new Date()): boolean {
   if (!task.deadline || task.status === "Completed") return false;
-  return new Date(task.deadline).getTime() < Date.now();
+  return dueInstant(task.deadline).getTime() < now.getTime();
 }
 
 // ---- Academic risk engine (transparent rules, no fake AI) -----------------

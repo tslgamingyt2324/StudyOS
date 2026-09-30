@@ -1,102 +1,97 @@
 "use client";
-import { useLiveQuery } from "dexie-react-hooks";
-import { motion } from "framer-motion";
-import { db } from "@/db/db";
-import SubTabs from "@/components/SubTabs";
-import StatCard from "@/components/StatCard";
+import { useMemo, useState } from "react";
+import { BarChart3, Lightbulb } from "lucide-react";
+import { useStudySessions } from "@/hooks/useStudy";
+import { useCourses } from "@/hooks/useCourses";
+import { useSettings } from "@/hooks/useSettings";
+import { useExams } from "@/hooks/useExams";
+import { useQuickAdd } from "@/components/shell/QuickAdd";
+import { BarChart, HBar } from "@/components/study/BarChart";
+import { EmptyState, PageHeader, PageSkeleton, Section, Segmented, Stat } from "@/components/ui";
+import { addDays, dateKey, formatMinutes } from "@/lib/dates";
+import { buildInsights, byActivity, byCourse, byMonth, byWeekday, lastNDays, minutesByDay, summarize, WEEKDAY_SHORT, sessionsBetween, MIN_SESSIONS_FOR_PATTERNS } from "@/lib/stats";
 
-export default function StudyAnalyticsPage() {
-  const allSessions = useLiveQuery(() => db.studySessions.toArray()) ?? [];
-  const settings = useLiveQuery(() => db.settings.toCollection().first());
-  const completed = allSessions.filter((s) => s.completed);
-  const goalMinutes = settings?.dailyStudyGoalMinutes || 240;
+type Range = "7 days" | "30 days" | "All time";
 
-  const byDay = new Map<string, number>();
-  for (const s of completed) {
-    const key = s.startedAt.slice(0, 10);
-    byDay.set(key, (byDay.get(key) ?? 0) + s.actualMinutes);
+export default function AnalyticsPage() {
+  const { completed, loading } = useStudySessions();
+  const { currentCourses, byId } = useCourses();
+  const { settings } = useSettings();
+  const { upcoming } = useExams();
+  const quick = useQuickAdd();
+  const [range, setRange] = useState<Range>("30 days");
+
+  const view = useMemo(() => {
+    if (!settings) return null;
+    const now = new Date();
+    const from = range === "7 days" ? dateKey(addDays(now, -6)) : range === "30 days" ? dateKey(addDays(now, -29)) : "0000-00-00";
+    const scoped = sessionsBetween(completed, from, dateKey(now));
+    const daily = lastNDays(minutesByDay(completed), 30, now);
+    return {
+      scoped, summary: summarize(scoped, settings.dailyStudyGoalMinutes, now), overall: summarize(completed, settings.dailyStudyGoalMinutes, now), daily,
+      weekday: byWeekday(scoped), months: byMonth(completed, 6, now), courseMap: byCourse(scoped), activity: byActivity(scoped),
+      insights: buildInsights({ sessions: completed, courses: currentCourses, exams: upcoming, dailyGoalMinutes: settings.dailyStudyGoalMinutes, weekStartsOn: settings.weekStartsOn ?? 0, today: now }),
+    };
+  }, [completed, settings, range, currentCourses, upcoming]);
+
+  if (loading || !settings || !view) return <PageSkeleton />;
+  if (completed.length === 0) {
+    return (
+      <div className="space-y-6"><PageHeader title="Analytics" />
+        <div className="card"><EmptyState icon={BarChart3} title="No data yet" message="Complete a study session and your time, streaks and patterns will appear here." action={<button className="btn btn-primary" onClick={() => quick.open("study-log")}>Log a session</button>} /></div></div>
+    );
   }
-
-  const totalMinutes = completed.reduce((sum, s) => sum + s.actualMinutes, 0);
-  const daysWithData = byDay.size;
-  const avgDailyMinutes = daysWithData ? totalMinutes / daysWithData : 0;
-  const longestSession = completed.reduce((max, s) => Math.max(max, s.actualMinutes), 0);
-
-  const now = new Date();
-  const weekCutoff = new Date(now); weekCutoff.setDate(now.getDate() - 6);
-  const monthCutoff = new Date(now); monthCutoff.setDate(now.getDate() - 29);
-  const weeklyMinutes = completed.filter((s) => new Date(s.startedAt) >= weekCutoff).reduce((sum, s) => sum + s.actualMinutes, 0);
-  const monthlyMinutes = completed.filter((s) => new Date(s.startedAt) >= monthCutoff).reduce((sum, s) => sum + s.actualMinutes, 0);
-
-  // Streaks: consecutive days (ending today) meeting the daily goal.
-  const metGoalDays = new Set([...byDay.entries()].filter(([, m]) => m >= goalMinutes).map(([d]) => d));
-  let currentStreak = 0;
-  { const d = new Date(); while (metGoalDays.has(d.toISOString().slice(0, 10))) { currentStreak++; d.setDate(d.getDate() - 1); } }
-
-  let longestStreak = 0, running = 0;
-  const sortedDays = [...byDay.keys()].sort();
-  for (let i = 0; i < sortedDays.length; i++) {
-    if (metGoalDays.has(sortedDays[i])) {
-      running = i > 0 && isConsecutive(sortedDays[i - 1], sortedDays[i]) ? running + 1 : 1;
-      longestStreak = Math.max(longestStreak, running);
-    } else running = 0;
-  }
-  function isConsecutive(a: string, b: string) {
-    const d1 = new Date(a), d2 = new Date(b);
-    return (d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24) === 1;
-  }
-
-  const goalCompletionRate = daysWithData ? Math.round((metGoalDays.size / daysWithData) * 100) : 0;
-
-  const last7 = Array.from({ length: 7 }).map((_, i) => {
-    const d = new Date(); d.setDate(d.getDate() - (6 - i));
-    const key = d.toISOString().slice(0, 10);
-    return { label: d.toLocaleDateString(undefined, { weekday: "short" }), minutes: byDay.get(key) ?? 0 };
-  });
-  const maxBar = Math.max(goalMinutes, ...last7.map((d) => d.minutes), 1);
+  const { summary: s, overall } = view;
+  const goal = settings.dailyStudyGoalMinutes;
+  const courseRows = [...view.courseMap.entries()].map(([id, m]) => ({ id, m, label: id === "none" ? "No course" : byId(id)?.code ?? "Deleted course" })).sort((a, b) => b.m - a.m);
+  const actRows = [...view.activity.entries()].sort((a, b) => b[1] - a[1]);
+  const peakDay = Math.max(...view.weekday);
+  const enough = overall.sessionCount >= MIN_SESSIONS_FOR_PATTERNS;
 
   return (
-    <div className="px-4 pt-4 space-y-5">
-      <h1 className="text-2xl font-bold">Study</h1>
-      <SubTabs tabs={[
-        { href: "/study/timer", label: "Timer" },
-        { href: "/study/records", label: "Daily Records" },
-        { href: "/study/analytics", label: "Analytics" },
-      ]} />
+    <div className="space-y-6">
+      <PageHeader title="Analytics" subtitle="Everything below is calculated on this device from your own sessions." actions={<Segmented label="Range" value={range} options={["7 days", "30 days", "All time"] as const} onChange={setRange} />} />
 
-      <div className="grid grid-cols-2 gap-3">
-        <StatCard label="This Week" value={weeklyMinutes / 60} decimals={1} sublabel="hours studied" delay={0} />
-        <StatCard label="This Month" value={monthlyMinutes / 60} decimals={1} sublabel="hours studied" delay={0.05} />
-        <StatCard label="Daily Average" value={avgDailyMinutes / 60} decimals={1} sublabel="hours/day" delay={0.1} />
-        <StatCard label="Longest Session" value={longestSession / 60} decimals={1} sublabel="hours" delay={0.15} />
-        <StatCard label="Current Streak" value={currentStreak} decimals={0} sublabel="days meeting goal" tone={currentStreak > 0 ? "good" : "default"} delay={0.2} />
-        <StatCard label="Longest Streak" value={longestStreak} decimals={0} sublabel="days" delay={0.25} />
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <Stat label="Total study time" value={formatMinutes(s.totalMinutes)} hint={range} />
+        <Stat label="Sessions" value={s.sessionCount} hint={s.sessionCount ? `Avg ${formatMinutes(s.avgSessionMinutes)}` : undefined} />
+        <Stat label="Longest session" value={formatMinutes(s.longestSessionMinutes)} />
+        <Stat label="Goal completion" value={s.activeDays ? `${s.goalCompletionRate}%` : "—"} hint={s.activeDays ? `${s.goalDaysMet} of ${s.activeDays} study days` : undefined} />
+        <Stat label="Current streak" value={`${overall.currentStreak}d`} />
+        <Stat label="Best streak" value={`${overall.bestStreak}d`} />
+        <Stat label="Most productive day" value={overall.mostProductiveDay ?? "—"} hint={overall.mostProductiveDay ? undefined : `Needs ${MIN_SESSIONS_FOR_PATTERNS}+ sessions`} />
+        <Stat label="Most productive time" value={overall.mostProductiveTime ?? "—"} hint={overall.mostProductiveTime ? undefined : `Needs ${MIN_SESSIONS_FOR_PATTERNS}+ sessions`} />
       </div>
 
-      <section className="card p-4 space-y-2">
-        <h2 className="font-semibold text-sm">Goal Completion Rate</h2>
-        <p className="text-2xl font-bold text-accent">{goalCompletionRate}%</p>
-        <p className="text-xs text-ink-faint">of days with any study time, on {daysWithData} tracked day{daysWithData !== 1 && "s"}</p>
-      </section>
+      {view.insights.length > 0 && (
+        <Section title="Insights">
+          <ul className="card space-y-2.5 p-4">{view.insights.map((i) => <li key={i.id} className="flex items-start gap-2.5 text-sm"><Lightbulb size={15} className="mt-0.5 shrink-0 text-accent" aria-hidden="true" />{i.text}</li>)}</ul>
+          <p className="mt-1 text-[11px] text-ink-faint">Rule-based and calculated from your data. Pattern insights appear once you have enough sessions.</p>
+        </Section>
+      )}
 
-      <section className="card p-4 space-y-3">
-        <h2 className="font-semibold text-sm">Last 7 Days</h2>
-        <div className="flex items-end justify-between gap-2 h-32">
-          {last7.map((d, i) => {
-            const pct = (d.minutes / maxBar) * 100;
-            const met = d.minutes >= goalMinutes;
-            return (
-              <div key={i} className="flex flex-1 flex-col items-center gap-1">
-                <span className="text-[10px] text-ink-faint">{d.minutes > 0 ? `${(d.minutes / 60).toFixed(1)}h` : ""}</span>
-                <div className="relative flex h-24 w-full items-end overflow-hidden rounded-lg bg-surface-sunken">
-                  <motion.div className={`w-full rounded-lg ${met ? "bg-good" : "bg-accent"}`} initial={{ height: 0 }} animate={{ height: `${pct}%` }} transition={{ duration: 0.5 }} />
-                </div>
-                <span className="text-[10px] text-ink-faint">{d.label}</span>
-              </div>
-            );
-          })}
-        </div>
-      </section>
+      <Section title="Daily · last 30 days">
+        <div className="card p-4"><BarChart caption="Study time per day for the last 30 days" goal={goal || undefined} bars={view.daily.map((d, i) => ({ label: i % 5 === 4 || i === 0 ? String(d.date.getDate()) : "", value: d.minutes, highlight: d.key === dateKey() }))} />
+          {goal > 0 && <p className="mt-2 text-[11px] text-ink-muted">Dashed line = your daily goal ({formatMinutes(goal)}).</p>}</div>
+      </Section>
+
+      <div className="grid gap-6 md:grid-cols-2">
+        <Section title={`By weekday · ${range}`}>
+          <div className="card p-4"><BarChart caption="Study time by weekday" bars={view.weekday.map((m, i) => ({ label: WEEKDAY_SHORT[i], value: m, highlight: enough && m === peakDay && m > 0 }))} /></div>
+        </Section>
+        <Section title="By month">
+          <div className="card p-4"><BarChart caption="Study time by month" bars={view.months.map((m, i) => ({ label: m.label, value: m.minutes, highlight: i === view.months.length - 1 }))} /></div>
+        </Section>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-2">
+        <Section title={`By course · ${range}`}>
+          <div className="card space-y-3 p-4">{courseRows.length === 0 ? <p className="text-sm text-ink-muted">No sessions in this range.</p> : courseRows.map((r) => <HBar key={r.id} label={r.label} value={r.m} max={courseRows[0].m} />)}</div>
+        </Section>
+        <Section title={`By activity · ${range}`}>
+          <div className="card space-y-3 p-4">{actRows.length === 0 ? <p className="text-sm text-ink-muted">No sessions in this range.</p> : actRows.map(([k, m]) => <HBar key={k} label={k} value={m} max={actRows[0][1]} />)}</div>
+        </Section>
+      </div>
     </div>
   );
 }

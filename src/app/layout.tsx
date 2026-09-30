@@ -3,10 +3,12 @@ import "./globals.css";
 import AppShell from "@/components/AppShell";
 
 export const metadata: Metadata = {
-  title: "Naffiz OS",
-  description: "Personal Academic & Life Management System",
+  title: { default: "StudyOS", template: "%s · StudyOS" },
+  description: "StudyOS — a local-first student operating system for courses, attendance, planning, study and goals.",
+  applicationName: "StudyOS",
   manifest: "/manifest.json",
-  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Naffiz OS" },
+  icons: { icon: "/icon-192.png", apple: "/icon-192.png" },
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "StudyOS" },
 };
 
 export const viewport: Viewport = {
@@ -21,7 +23,11 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* Apply the saved theme before first paint to avoid a light flash in dark mode. */}
+        <script dangerouslySetInnerHTML={{ __html: `try{var t=localStorage.getItem("studyos:theme");if(t==="dark"||((!t||t==="system")&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark")}catch(e){}` }} />
+      </head>
       <body className="font-sans antialiased">
         <AppShell>{children}</AppShell>
       </body>

@@ -1,96 +1,101 @@
 "use client";
-import { useEffect, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
-import { Plus, X, Timer, ListTodo, FileText, StickyNote, GraduationCap } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { ReactNode, useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { runDataMigrations } from "@/db/db";
 import { ThemeProvider } from "@/lib/theme";
 import { StudyTimerProvider } from "@/lib/studyTimer";
-import BottomNav from "@/components/BottomNav";
+import { ToastProvider } from "@/components/shell/Toast";
+import { QuickAddProvider, useQuickAdd } from "@/components/shell/QuickAdd";
+import { BottomNav, SectionTabs, Sidebar } from "@/components/shell/Navigation";
+import CommandPalette from "@/components/shell/CommandPalette";
+import SessionComplete from "@/components/shell/SessionComplete";
+import ActiveTimerPill from "@/components/shell/ActiveTimerPill";
+import { AchievementWatcher, ReminderEngine } from "@/components/shell/Background";
+import { ErrorNote } from "@/components/ui";
 
-export default function AppShell({ children }: { children: React.ReactNode }) {
-  const [ready, setReady] = useState(false);
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const router = useRouter();
+function Frame({ children }: { children: ReactNode }) {
+  const [searchOpen, setSearchOpen] = useState(false);
+  const quick = useQuickAdd();
+  const pathname = usePathname();
+  const focus = pathname.startsWith("/study/focus");
 
   useEffect(() => {
-    runDataMigrations().finally(() => setReady(true));
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").catch(() => {});
-    }
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setSearchOpen((o) => !o); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const quickActions = [
-    { label: "Start Study Session", icon: Timer, go: "/study/timer" },
-    { label: "Add Task", icon: ListTodo, go: "/planner/tasks?new=1" },
-    { label: "Add Exam", icon: GraduationCap, go: "/planner/exams?new=1" },
-    { label: "Add Routine Item", icon: FileText, go: "/planner/routine?new=1" },
-    { label: "Add Note to Course", icon: StickyNote, go: "/academics/courses" },
-  ];
+  if (focus) return <main id="main">{children}<SessionComplete /></main>;
+
+  return (
+    <>
+      <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[90] focus:rounded-lg focus:bg-accent focus:px-3 focus:py-2 focus:text-white">Skip to content</a>
+      <Sidebar onSearch={() => setSearchOpen(true)} onQuickAdd={() => quick.open("menu")} />
+      <div className="lg:pl-64">
+        <main id="main" className="mx-auto w-full max-w-5xl px-4 pb-32 pt-5 sm:px-6 lg:pb-12 lg:pt-8">
+          <div className="mb-3 flex justify-end lg:hidden">
+            <button onClick={() => setSearchOpen(true)} className="icon-btn -mb-2" aria-label="Search"><SearchIcon /></button>
+          </div>
+          <SectionTabs />
+          {children}
+        </main>
+      </div>
+      <BottomNav onQuickAdd={() => quick.open("menu")} />
+      <ActiveTimerPill />
+      <CommandPalette open={searchOpen} onClose={() => setSearchOpen(false)} />
+      <SessionComplete />
+    </>
+  );
+}
+
+function SearchIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+      <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
+    </svg>
+  );
+}
+
+export default function AppShell({ children }: { children: ReactNode }) {
+  const [ready, setReady] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    runDataMigrations()
+      .catch((e) => setError(e instanceof Error ? e.message : "Local storage could not be opened."))
+      .finally(() => setReady(true));
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+  }, []);
 
   if (!ready) {
     return (
-      <div className="flex h-screen items-center justify-center bg-surface">
+      <div className="flex h-screen items-center justify-center bg-surface" role="status" aria-label="Loading StudyOS">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
       </div>
     );
   }
-
+  if (error) {
+    return (
+      <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-3 p-6">
+        <h1 className="text-xl font-bold">StudyOS can't open its storage</h1>
+        <ErrorNote message={error} />
+        <p className="text-sm text-ink-muted">Private browsing modes and some storage-restricted browsers block IndexedDB. Try a normal window, then reload.</p>
+      </div>
+    );
+  }
   return (
     <ThemeProvider>
-      <StudyTimerProvider>
-      <div className="mx-auto min-h-screen max-w-xl pb-28">{children}</div>
-      <BottomNav />
-
-      <button
-        onClick={() => setSheetOpen(true)}
-        aria-label="Quick add"
-        className="fixed right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-white shadow-lg active:scale-95 transition-transform"
-        style={{ bottom: "calc(76px + env(safe-area-inset-bottom, 0px))" }}
-      >
-        <Plus size={26} />
-      </button>
-
-      <AnimatePresence>
-        {sheetOpen && (
-          <>
-            <motion.div
-              className="fixed inset-0 z-50 bg-black/40"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setSheetOpen(false)}
-            />
-            <motion.div
-              className="fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl card p-5"
-              style={{ paddingBottom: "calc(2rem + env(safe-area-inset-bottom, 0px))" }}
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              transition={{ type: "spring", damping: 30, stiffness: 300 }}
-            >
-              <div className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-surface-sunken" />
-              <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-lg font-semibold">Quick Add</h3>
-                <button onClick={() => setSheetOpen(false)}><X size={20} className="text-ink-muted" /></button>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                {quickActions.map((a) => (
-                  <button
-                    key={a.label}
-                    onClick={() => { setSheetOpen(false); router.push(a.go); }}
-                    className="flex flex-col items-center gap-2 rounded-2xl bg-surface-sunken/60 p-4 active:scale-95 transition-transform min-h-[88px] justify-center"
-                  >
-                    <a.icon size={22} className="text-accent" />
-                    <span className="text-xs font-medium text-center">{a.label}</span>
-                  </button>
-                ))}
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
-      </StudyTimerProvider>
+      <ToastProvider>
+        <StudyTimerProvider>
+          <QuickAddProvider>
+            <Frame>{children}</Frame>
+            <ReminderEngine />
+            <AchievementWatcher />
+          </QuickAddProvider>
+        </StudyTimerProvider>
+      </ToastProvider>
     </ThemeProvider>
   );
 }

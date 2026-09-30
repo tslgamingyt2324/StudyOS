@@ -13,8 +13,25 @@ interface StartArgs {
   isQuickStudy?: boolean;
 }
 
+/** Shown on the "Session complete" screen right after a timer is stopped. */
+export interface SessionCompletion {
+  sessionId: number;
+  minutes: number;
+  courseId?: number;
+  studyType?: StudyType;
+  taskLabel?: string;
+  isQuickStudy?: boolean;
+  mode: StudySession["mode"];
+}
+
 interface StudyTimerContextValue {
   active: ActiveTimer | undefined;
+  /** Set for as long as the completion screen should be showing. */
+  completion: SessionCompletion | null;
+  dismissCompletion: () => void;
+  saveFeedback: (feedback: { rating?: StudySession["rating"]; accomplished?: string }) => Promise<void>;
+  /** Restart the clock from zero, keeping course / activity / mode. */
+  reset: () => Promise<void>;
   elapsedSeconds: number;
   remainingSeconds: number; // negative once overtime
   isOvertime: boolean;
@@ -33,7 +50,8 @@ const StudyTimerContext = createContext<StudyTimerContextValue | null>(null);
 
 export function StudyTimerProvider({ children }: { children: React.ReactNode }) {
   const active = useLiveQuery(() => db.activeTimer.get(1));
-  const [tick, setTick] = useState(0);
+  const [, setTick] = useState(0);
+  const [completion, setCompletion] = useState<SessionCompletion | null>(null);
 
   // Re-render once a second so the displayed time stays live, without
   // storing elapsed time itself in state — it's always derived from
@@ -86,13 +104,38 @@ export function StudyTimerProvider({ children }: { children: React.ReactNode }) 
     });
   };
 
+  // The session is written to the database FIRST; the completion screen is a
+  // purely optional layer on top, so closing the tab at that point loses nothing.
   const finish = async () => {
     if (!active) return;
     const minutes = Math.max(1, Math.round(elapsedSeconds / 60));
-    await db.studySessions.update(active.sessionId, {
-      actualMinutes: minutes, endedAt: new Date().toISOString(), completed: true,
+    await db.transaction("rw", db.studySessions, db.activeTimer, async () => {
+      await db.studySessions.update(active.sessionId, {
+        actualMinutes: minutes, endedAt: new Date().toISOString(), completed: true,
+      });
+      await db.activeTimer.delete(1);
     });
-    await db.activeTimer.delete(1);
+    setCompletion({
+      sessionId: active.sessionId, minutes, courseId: active.courseId, studyType: active.studyType,
+      taskLabel: active.taskLabel, isQuickStudy: active.isQuickStudy, mode: active.mode,
+    });
+  };
+
+  const reset = async () => {
+    if (!active) return;
+    const startedAt = new Date().toISOString();
+    await db.transaction("rw", db.studySessions, db.activeTimer, async () => {
+      await db.studySessions.update(active.sessionId, { startedAt });
+      await db.activeTimer.update(1, { startedAt, status: "running", pausedAt: undefined, accumulatedPauseMs: 0 });
+    });
+  };
+
+  const saveFeedback = async (fb: { rating?: StudySession["rating"]; accomplished?: string }) => {
+    if (!completion) return;
+    const patch: Partial<StudySession> = {};
+    if (fb.rating) patch.rating = fb.rating;
+    if (fb.accomplished?.trim()) patch.accomplished = fb.accomplished.trim();
+    if (Object.keys(patch).length) await db.studySessions.update(completion.sessionId, patch);
   };
 
   const discard = async () => {
@@ -104,7 +147,8 @@ export function StudyTimerProvider({ children }: { children: React.ReactNode }) 
   return (
     <StudyTimerContext.Provider
       value={{
-        active, elapsedSeconds, remainingSeconds, isOvertime: remainingSeconds < 0,
+        active, completion, dismissCompletion: () => setCompletion(null), saveFeedback, reset,
+        elapsedSeconds, remainingSeconds, isOvertime: remainingSeconds < 0,
         start, startQuick, pause, resume, finish, discard,
       }}
     >
