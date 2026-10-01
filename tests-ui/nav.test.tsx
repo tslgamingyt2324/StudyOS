@@ -5,7 +5,7 @@ import { ThemeProvider } from "@/lib/theme";
 import { StudyTimerProvider } from "@/lib/studyTimer";
 import { ToastProvider } from "@/components/shell/Toast";
 import { QuickAddProvider, useQuickAdd } from "@/components/shell/QuickAdd";
-import { BottomNav } from "@/components/shell/Navigation";
+import { BottomNav, Sidebar } from "@/components/shell/Navigation";
 import NotificationPanel from "@/components/settings/NotificationPanel";
 import { nav } from "./setup";
 import { resetDb } from "./seed";
@@ -96,5 +96,16 @@ describe("notification settings panel", () => {
     render(<NotificationPanel classRemindersOn onEnableClassReminders={noop} />);
     await screen.findByText("Notifications are enabled");
     for (const l of ["Notification support", "Permission", "Service worker", "PWA"]) expect(screen.getByText(l)).toBeTruthy();
+  });
+});
+
+describe("brand", () => {
+  it("the desktop sidebar shows the StudyOS logo with an accessible name and links home", async () => {
+    await resetDb();
+    render(<ThemeProvider><ToastProvider><StudyTimerProvider><QuickAddProvider><Sidebar onSearch={() => {}} onQuickAdd={() => {}} /></QuickAddProvider></StudyTimerProvider></ToastProvider></ThemeProvider>);
+    const home = screen.getByRole("link", { name: "StudyOS home" });
+    expect(home.getAttribute("href")).toBe("/");
+    expect(within(home).getByRole("img", { name: "StudyOS" })).toBeTruthy();
+    expect(home.querySelectorAll("svg").length).toBe(2); // app tile + wordmark
   });
 });

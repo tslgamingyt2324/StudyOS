@@ -6,15 +6,15 @@ import { MoreHorizontal, Plus, Search, StickyNote, Settings, Target, Timer, Luci
 import { NAV, groupFor, isActive } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 import Modal from "@/components/ui/Modal";
+import { Logo } from "@/components/brand/Logo";
 
 export function Sidebar({ onSearch, onQuickAdd }: { onSearch: () => void; onQuickAdd: () => void }) {
   const pathname = usePathname();
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-border bg-surface-raised lg:flex" aria-label="Primary">
-      <div className="flex items-center gap-2.5 px-5 pb-3 pt-6">
-        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent text-sm font-bold text-white" aria-hidden="true">S</span>
-        <span className="text-lg font-bold tracking-tight">StudyOS</span>
-      </div>
+      <Link href="/" className="flex items-center rounded-xl px-5 pb-3 pt-6" aria-label="StudyOS home">
+        <Logo iconSize={36} />
+      </Link>
       <div className="space-y-2 px-3 pb-2">
         <button onClick={onQuickAdd} className="btn btn-primary w-full"><Plus size={16} /> Quick add</button>
         <button onClick={onSearch} className="btn btn-secondary w-full justify-between font-normal text-ink-muted">

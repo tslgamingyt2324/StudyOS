@@ -1,4 +1,5 @@
 "use client";
+import { AppIcon } from "@/components/brand/Logo";
 import { ReactNode, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { runDataMigrations } from "@/db/db";
@@ -72,7 +73,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   if (!ready) {
     return (
       <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-3 bg-surface" role="status" aria-label="Loading StudyOS">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+        <AppIcon size={76} className="rounded-[22%] shadow-pop motion-safe:animate-pulse" />
         <p className="text-sm text-ink-muted">Opening StudyOS…</p>
       </div>
     );

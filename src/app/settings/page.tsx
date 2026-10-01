@@ -9,6 +9,7 @@ import { ErrorNote, Field, PageHeader, PageSkeleton, Segmented, ToggleRow } from
 import { validateBackup, BackupCheck, describeCounts } from "@/lib/backup";
 import { backupFilename, downloadJson, exportBackupObject, restoreBackup } from "@/db/backupIo";
 import { deleteAllData } from "@/db/db";
+import { LogoMark } from "@/components/brand/Logo";
 import NotificationPanel from "@/components/settings/NotificationPanel";
 import { AppSettings, Grade } from "@/types";
 
@@ -141,7 +142,7 @@ export default function SettingsPage() {
       <Card title="Danger zone">
         <button onClick={() => { setResetText(""); setResetOpen(true); }} className="btn btn-danger w-full"><RotateCcw size={16} /> Reset StudyOS…</button>
       </Card>
-      <p className="text-center text-xs text-ink-faint">StudyOS · local-first · no accounts, no tracking, no external services</p>
+      <p className="flex items-center justify-center gap-1.5 text-center text-xs text-ink-faint"><LogoMark size={14} /> StudyOS · local-first · no accounts, no tracking, no external services</p>
 
       <Modal open={!!check} onClose={() => !restoring && setCheck(null)} title="Restore this backup?"
         footer={<div className="flex gap-2"><button className="btn btn-secondary flex-1" disabled={restoring} onClick={() => setCheck(null)}>Cancel</button><button className="btn btn-primary flex-1" disabled={restoring} onClick={confirmRestore}>{restoring ? "Restoring…" : "Replace my data"}</button></div>}>

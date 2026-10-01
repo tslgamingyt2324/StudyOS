@@ -1,11 +1,11 @@
 // StudyOS service worker. All user data lives in IndexedDB, which works offline
 // on its own; this worker only keeps the app shell (pages + assets) available.
-const CACHE = "studyos-v3";
+const CACHE = "studyos-v4";
 const ROUTES = [
   "/", "/academics", "/academics/courses", "/academics/gpa", "/academics/attendance", "/academics/retakes",
   "/academics/degree", "/planner/calendar", "/planner/tasks", "/planner/exams", "/planner/routine",
   "/planner/schedule", "/study/timer", "/study/records", "/study/analytics", "/study/goals", "/study/focus",
-  "/notes", "/settings", "/manifest.json", "/icon-192.png", "/icon-512.png", "/apple-touch-icon.png", "/badge-96.png",
+  "/notes", "/settings", "/manifest.json", "/icon-192.png", "/icon-512.png", "/apple-touch-icon.png", "/badge-96.png", "/icon.svg",
 ];
 
 self.addEventListener("install", (event) => {
