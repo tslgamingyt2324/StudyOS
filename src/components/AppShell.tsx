@@ -10,7 +10,7 @@ import { BottomNav, SectionTabs, Sidebar } from "@/components/shell/Navigation";
 import CommandPalette from "@/components/shell/CommandPalette";
 import SessionComplete from "@/components/shell/SessionComplete";
 import ActiveTimerPill from "@/components/shell/ActiveTimerPill";
-import { AchievementWatcher, ReminderEngine } from "@/components/shell/Background";
+import { AchievementWatcher, NotificationNavigator, ReminderEngine } from "@/components/shell/Background";
 import { ErrorNote } from "@/components/ui";
 
 function Frame({ children }: { children: ReactNode }) {
@@ -34,7 +34,7 @@ function Frame({ children }: { children: ReactNode }) {
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[90] focus:rounded-lg focus:bg-accent focus:px-3 focus:py-2 focus:text-white">Skip to content</a>
       <Sidebar onSearch={() => setSearchOpen(true)} onQuickAdd={() => quick.open("menu")} />
       <div className="lg:pl-64">
-        <main id="main" className="mx-auto w-full max-w-5xl px-4 pb-32 pt-5 sm:px-6 lg:pb-12 lg:pt-8">
+        <main id="main" className="app-main mx-auto w-full max-w-5xl">
           <div className="mb-3 flex justify-end lg:hidden">
             <button onClick={() => setSearchOpen(true)} className="icon-btn -mb-2" aria-label="Search"><SearchIcon /></button>
           </div>
@@ -71,17 +71,19 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
   if (!ready) {
     return (
-      <div className="flex h-screen items-center justify-center bg-surface" role="status" aria-label="Loading StudyOS">
+      <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-3 bg-surface" role="status" aria-label="Loading StudyOS">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+        <p className="text-sm text-ink-muted">Opening StudyOS…</p>
       </div>
     );
   }
   if (error) {
     return (
-      <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-3 p-6">
+      <div className="mx-auto flex min-h-[100dvh] max-w-md flex-col justify-center gap-3 p-6">
         <h1 className="text-xl font-bold">StudyOS can't open its storage</h1>
         <ErrorNote message={error} />
         <p className="text-sm text-ink-muted">Private browsing modes and some storage-restricted browsers block IndexedDB. Try a normal window, then reload.</p>
+        <button className="btn btn-primary" onClick={() => window.location.reload()}>Try again</button>
       </div>
     );
   }
@@ -92,6 +94,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
           <QuickAddProvider>
             <Frame>{children}</Frame>
             <ReminderEngine />
+            <NotificationNavigator />
             <AchievementWatcher />
           </QuickAddProvider>
         </StudyTimerProvider>

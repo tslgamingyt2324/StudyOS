@@ -1,6 +1,7 @@
 import { CalendarEvent, Course, Exam, RoutineItem, StudySession, Task } from "@/types";
 import { addDays, dateKey, dueInstant } from "@/lib/dates";
 import { WEEKDAY_LONG } from "@/lib/stats";
+import { classEndTime } from "@/lib/classTime";
 
 export type EventSource = "class" | "exam" | "task" | "routine" | "study" | "event";
 
@@ -59,7 +60,7 @@ export function buildEvents(input: CalendarInput): UnifiedEvent[] {
         if (!s.days.includes(dayName)) return;
         out.push({
           uid: `class-${c.id}-${key}-${i}`, source: "class", refId: c.id, title: c.code,
-          subtitle: c.title, date: key, startTime: s.startTime, endTime: s.endTime, allDay: false,
+          subtitle: c.title, date: key, startTime: s.startTime, endTime: classEndTime(s), allDay: false,
           courseId: c.id, location: c.room, movable: false,
         });
       });

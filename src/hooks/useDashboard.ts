@@ -1,6 +1,7 @@
 "use client";
 import { useMemo } from "react";
 import { useSettings } from "@/hooks/useSettings";
+import { useNow } from "@/hooks/useNow";
 import { useCourses } from "@/hooks/useCourses";
 import { useTasks } from "@/hooks/useTasks";
 import { useExams } from "@/hooks/useExams";
@@ -24,12 +25,12 @@ export function useDashboard() {
   const study = useStudyStats(settings?.dailyStudyGoalMinutes ?? 0, settings?.weekStartsOn ?? 0);
   const g = useGoals({ settings, courses: c.courses, sessions: study.sessions, tasks: t.tasks, attendance: att.stats });
   const n = useNotes();
+  const now = useNow();
 
   const loading = !settings || c.loading || t.loading || e.loading || att.loading || study.loading || g.loading || n.loading;
 
   const data = useMemo(() => {
     if (!settings || loading) return null;
-    const now = new Date();
     const profile = getAcademicProfile(settings);
     const sem = c.currentSemester;
     const graded = sem?.id ? c.courses.filter((x) => x.semesterId === sem.id && x.gpaCounting && x.grade) : [];
@@ -50,7 +51,7 @@ export function useDashboard() {
       courses: c.currentCourses, allCourses: c.courses, byId: c.byId,
       tasks: t.open, exams: e.upcoming, attendance: att.stats, study, goals: g.active, notes: n.active,
     };
-  }, [settings, loading, c, t, e, att.stats, study, g.active, n.active]);
+  }, [settings, loading, now, c, t, e, att.stats, study, g.active, n.active]);
 
   return { loading, data };
 }

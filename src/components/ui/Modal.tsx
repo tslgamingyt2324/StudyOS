@@ -20,6 +20,13 @@ interface ModalProps {
   footer?: ReactNode;
 }
 
+/** When a field is focused the on-screen keyboard may cover it; scroll it to the middle once the keyboard is up. */
+function keepFieldVisible(e: React.FocusEvent<HTMLElement>) {
+  const el = e.target as HTMLElement;
+  if (!/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
+  window.setTimeout(() => { if (el.isConnected) el.scrollIntoView({ block: "center", behavior: "smooth" }); }, 300);
+}
+
 /**
  * Accessible dialog. Bottom sheet on phones, centred card from `sm` up.
  * Escape closes it, Tab is trapped inside, focus returns to the trigger, and
@@ -88,7 +95,11 @@ export default function Modal({ open, onClose, title, description, children, siz
               </div>
               <button type="button" data-close onClick={onClose} aria-label="Close dialog" className="icon-btn -mr-2 -mt-1"><X size={20} /></button>
             </div>
-            <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4">{children}</div>
+            <div
+              className="flex-1 overflow-y-auto overscroll-contain px-5 py-4"
+              style={footer ? undefined : { paddingBottom: "calc(1rem + env(safe-area-inset-bottom, 0px))" }}
+              onFocusCapture={keepFieldVisible}
+            >{children}</div>
             {footer && <div className="border-t border-border px-5 py-3" style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom, 0px))" }}>{footer}</div>}
           </motion.div>
         </div>

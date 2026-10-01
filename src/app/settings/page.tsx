@@ -1,6 +1,6 @@
 "use client";
 import { useRef, useState } from "react";
-import { Bell, Download, RotateCcw, Upload, AlertTriangle } from "lucide-react";
+import { Download, RotateCcw, Upload, AlertTriangle } from "lucide-react";
 import { useSettings } from "@/hooks/useSettings";
 import { useTheme } from "@/lib/theme";
 import { useToast } from "@/components/shell/Toast";
@@ -9,7 +9,7 @@ import { ErrorNote, Field, PageHeader, PageSkeleton, Segmented, ToggleRow } from
 import { validateBackup, BackupCheck, describeCounts } from "@/lib/backup";
 import { backupFilename, downloadJson, exportBackupObject, restoreBackup } from "@/db/backupIo";
 import { deleteAllData } from "@/db/db";
-import { showSystemNotification } from "@/components/shell/Background";
+import NotificationPanel from "@/components/settings/NotificationPanel";
 import { AppSettings, Grade } from "@/types";
 
 const Card = ({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) => (
@@ -29,7 +29,6 @@ export default function SettingsPage() {
   const [restoring, setRestoring] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [resetText, setResetText] = useState("");
-  const [notifPerm, setNotifPerm] = useState<string>(typeof Notification === "undefined" ? "unsupported" : Notification.permission);
 
   if (!settings) return <PageSkeleton />;
   const num = (v: string, fallback: number) => { const n = parseFloat(v); return Number.isFinite(n) ? n : fallback; };
@@ -69,13 +68,6 @@ export default function SettingsPage() {
     } finally { setRestoring(false); }
   };
 
-  const requestNotifications = async () => {
-    if (typeof Notification === "undefined") return;
-    const p = await Notification.requestPermission();
-    setNotifPerm(p);
-    if (p === "granted") await showSystemNotification({ id: "test", title: "StudyOS notifications are on", body: "You'll get reminders while StudyOS is open." });
-  };
-
   return (
     <div className="space-y-4 pb-6">
       <PageHeader title="Settings" subtitle="Everything is stored on this device." />
@@ -110,7 +102,7 @@ export default function SettingsPage() {
         </div>
 
         <div className="space-y-4">
-          <Card title="Reminders" hint="StudyOS is a local app, so reminders fire while it's open (or installed and running) — a closed app can't schedule notifications. Each reminder fires at most once.">
+          <Card title="Reminders" hint="Reminders are delivered while StudyOS is running and caught up when you reopen it. Each reminder is sent only once.">
             <ToggleRow label="Daily study goal" checked={settings.remindStudyGoal} onChange={(v) => set({ remindStudyGoal: v })} />
             <ToggleRow label="Upcoming class" checked={settings.remindUpcomingClass} onChange={(v) => set({ remindUpcomingClass: v })} />
             <ToggleRow label="Assignment deadlines" checked={settings.remindDeadlines} onChange={(v) => set({ remindDeadlines: v })} />
@@ -119,10 +111,7 @@ export default function SettingsPage() {
               <Field label="Class alert (minutes before)">{(id) => <input id={id} type="number" min={1} max={120} className="input" defaultValue={settings.classReminderMinutes ?? 15} onBlur={(e) => set({ classReminderMinutes: Math.min(120, Math.max(1, parseInt(e.target.value) || 15)) })} />}</Field>
               <Field label="Study reminder after (hour, 0–23)">{(id) => <input id={id} type="number" min={0} max={23} className="input" defaultValue={settings.studyReminderHour ?? 18} onBlur={(e) => set({ studyReminderHour: Math.min(23, Math.max(0, parseInt(e.target.value) || 18)) })} />}</Field>
             </div>
-            {notifPerm === "unsupported" ? <p className="text-xs text-ink-muted">This browser doesn&apos;t support system notifications — reminders appear inside the app instead.</p>
-              : notifPerm === "granted" ? <p className="flex items-center gap-2 text-xs text-good"><Bell size={14} aria-hidden="true" /> System notifications are allowed.</p>
-              : notifPerm === "denied" ? <p className="text-xs text-warn">Notifications are blocked in your browser settings — reminders will show inside the app.</p>
-              : <button className="btn btn-secondary w-full" onClick={requestNotifications}><Bell size={16} /> Allow system notifications</button>}
+            <NotificationPanel classRemindersOn={settings.remindUpcomingClass} onEnableClassReminders={() => set({ remindUpcomingClass: true })} />
           </Card>
 
           <Card title="Retake rules">

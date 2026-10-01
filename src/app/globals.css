@@ -36,7 +36,7 @@
 }
 
 * { -webkit-tap-highlight-color: transparent; }
-html { color-scheme: light; }
+html { color-scheme: light; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 html.dark { color-scheme: dark; }
 
 html, body {
@@ -122,3 +122,26 @@ html, body {
 ::-webkit-scrollbar { width: 0; height: 0; }
 .scroll-thin::-webkit-scrollbar { height: 6px; width: 6px; display: block; }
 .scroll-thin::-webkit-scrollbar-thumb { background: var(--border); border-radius: 6px; }
+
+/* ---- Mobile polish ------------------------------------------------------ */
+/* No 300ms tap delay / accidental double-tap zoom on controls (pinch-zoom stays available). */
+a, button, [role="button"], input, select, textarea, summary { touch-action: manipulation; }
+
+/* iOS Safari zooms the whole page when a focused field is under 16px. */
+@media (max-width: 1023px) {
+  .input { font-size: 16px; }
+}
+
+/* Main column: respects notch / home indicator / landscape side insets, and clears the bottom bar. */
+.app-main {
+  padding-top: calc(1.25rem + env(safe-area-inset-top, 0px));
+  padding-bottom: calc(6.5rem + env(safe-area-inset-bottom, 0px));
+  padding-left: max(1rem, env(safe-area-inset-left, 0px));
+  padding-right: max(1rem, env(safe-area-inset-right, 0px));
+}
+@media (min-width: 640px) {
+  .app-main { padding-left: max(1.5rem, env(safe-area-inset-left, 0px)); padding-right: max(1.5rem, env(safe-area-inset-right, 0px)); }
+}
+@media (min-width: 1024px) {
+  .app-main { padding-top: 2rem; padding-bottom: 3rem; }
+}

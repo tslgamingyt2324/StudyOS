@@ -14,7 +14,8 @@ import { useQuickAdd } from "@/components/shell/QuickAdd";
 import { Badge, EmptyState, PageSkeleton, Progress, Section, Stat } from "@/components/ui";
 import AttendanceCard from "@/components/academic/AttendanceCard";
 import CourseForm from "@/components/forms/CourseForm";
-import { cn, deadlineLabel, formatTime12 } from "@/lib/utils";
+import { cn, deadlineLabel } from "@/lib/utils";
+import { formatClassRange } from "@/lib/classTime";
 import { gradeColor } from "@/lib/gpa";
 import { daysBetween, formatMinutes, parseKey, shortDate } from "@/lib/dates";
 import { WEEKDAY_LONG, WEEKDAY_SHORT, completed } from "@/lib/stats";
@@ -108,7 +109,7 @@ export default function CourseDetail() {
               course.schedule.map((b, i) => (
                 <div key={i} className="flex items-center justify-between p-4">
                   <span className="text-sm font-medium">{b.days.map((d) => WEEKDAY_SHORT[WEEKDAY_LONG.indexOf(d)]).join(", ")}</span>
-                  <span className="text-sm tabular text-ink-muted">{formatTime12(b.startTime)} – {formatTime12(b.endTime)}</span>
+                  <span className="text-sm tabular text-ink-muted">{formatClassRange(b)}</span>
                 </div>
               ))}
           </div>

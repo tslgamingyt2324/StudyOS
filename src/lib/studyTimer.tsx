@@ -59,7 +59,15 @@ export function StudyTimerProvider({ children }: { children: React.ReactNode }) 
   useEffect(() => {
     if (!active || active.status !== "running") return;
     const id = setInterval(() => setTick((t) => t + 1), 1000);
-    return () => clearInterval(id);
+    // Repaint immediately when the phone/app resumes instead of waiting for the next tick.
+    const onResume = () => { if (document.visibilityState !== "hidden") setTick((t) => t + 1); };
+    document.addEventListener("visibilitychange", onResume);
+    window.addEventListener("pageshow", onResume);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onResume);
+      window.removeEventListener("pageshow", onResume);
+    };
   }, [active?.status, active?.startedAt]);
 
   const now = Date.now();

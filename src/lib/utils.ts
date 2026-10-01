@@ -1,5 +1,6 @@
 import { Course, ClassSchedule, Task } from "@/types";
 import { daysBetween, dueInstant } from "@/lib/dates";
+import { blocksOverlap, classStartMinutes, classEndMinutes, minutesToTime } from "@/lib/classTime";
 
 export function cn(...classes: (string | false | undefined | null)[]) {
   return classes.filter(Boolean).join(" ");
@@ -63,15 +64,14 @@ export function findScheduleConflicts(courses: Course[]): ScheduleConflict[] {
     for (let j = i + 1; j < entries.length; j++) {
       const a = entries[i], b = entries[j];
       if (a.day !== b.day || a.course.id === b.course.id) continue;
-      const aStart = timeToMinutes(a.sched.startTime), aEnd = timeToMinutes(a.sched.endTime);
-      const bStart = timeToMinutes(b.sched.startTime), bEnd = timeToMinutes(b.sched.endTime);
-      if (aStart < bEnd && bStart < aEnd) {
+      // Uses the full class length (explicit end time, else start + 90 min).
+      if (blocksOverlap(a.sched, b.sched)) {
         conflicts.push({
           day: a.day,
           courseA: a.course.code,
           courseB: b.course.code,
-          overlapStart: a.sched.startTime,
-          overlapEnd: a.sched.endTime,
+          overlapStart: minutesToTime(Math.max(classStartMinutes(a.sched), classStartMinutes(b.sched))),
+          overlapEnd: minutesToTime(Math.min(classEndMinutes(a.sched), classEndMinutes(b.sched))),
         });
       }
     }

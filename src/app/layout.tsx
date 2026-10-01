@@ -7,7 +7,14 @@ export const metadata: Metadata = {
   description: "StudyOS — a local-first student operating system for courses, attendance, planning, study and goals.",
   applicationName: "StudyOS",
   manifest: "/manifest.json",
-  icons: { icon: "/icon-192.png", apple: "/icon-192.png" },
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
   appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "StudyOS" },
 };
 
@@ -15,6 +22,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
+  interactiveWidget: "resizes-content", // on-screen keyboard resizes the layout (Android Chrome) instead of covering fields
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#f2f2f7" },
     { media: "(prefers-color-scheme: dark)", color: "#000000" },

@@ -103,13 +103,17 @@ export function buildReminders(input: ReminderInput): Reminder[] {
 
   if (settings.remindUpcomingClass) {
     const lead = settings.classReminderMinutes ?? 15;
+    // Only today's classes (matched by weekday), measured from the START time.
+    // The class length (90 min) deliberately plays no part in when we remind.
     for (const { course, sched } of todaysClasses(input.courses, now)) {
-      const mins = Math.round((combine(today, sched.startTime).getTime() - now.getTime()) / 60000);
-      if (mins > 0 && mins <= lead) {
+      const msUntil = combine(today, sched.startTime).getTime() - now.getTime();
+      // Due once inside the lead window; never after the class has started (no stale reminders).
+      if (msUntil > 0 && msUntil <= lead * 60_000) {
+        const mins = Math.max(1, Math.ceil(msUntil / 60_000));
         out.push({
           id: `class-${course.id}-${today}-${sched.startTime}`,
           title: `${course.code} starts soon`,
-          body: `${course.code} starts in ${mins} minute${mins === 1 ? "" : "s"}${course.room ? ` · ${course.room}` : ""}.`,
+          body: `${course.code} starts in ${mins} minute${mins === 1 ? "" : "s"}${course.room ? ` · ${course.room}` : ""}`,
           href: "/planner/calendar",
         });
       }
@@ -138,7 +142,7 @@ export function buildReminders(input: ReminderInput): Reminder[] {
       if (![3, 1, 0].includes(days)) continue;
       const when = days === 0 ? "today" : days === 1 ? "tomorrow" : "in 3 days";
       out.push({
-        id: `exam-${e.id}-${days}`, title: "Exam coming up",
+        id: `exam-${e.id}-${e.date}-${days}`, title: "Exam coming up",
         body: `${code(e.courseId) ?? "Your"} ${e.title} is ${when}.`, href: "/planner/exams",
       });
     }

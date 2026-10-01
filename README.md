@@ -61,3 +61,35 @@ Installable (`manifest.json`, icons, shortcuts). The service worker precaches ev
 ## Stack
 
 Next.js 14 (App Router) · React 18 · TypeScript · Tailwind CSS · Dexie/IndexedDB · Framer Motion · Lucide. No chart or editor libraries — charts and the Markdown renderer are small in-repo components.
+
+## Class schedule rule
+
+Every class block is **90 minutes** unless it stores an explicit end time. `src/lib/classTime.ts` is the single
+source of truth (`classEndTime`, `classPhase`, `blocksOverlap`): a missing/blank/invalid end time becomes
+start + 90 min, an explicit valid end time is always respected, and nothing is rewritten in the database.
+A class is "current" for `start ≤ now < end`. Reminders are always measured from the **start** time.
+
+## Notifications — what works and what can't
+
+**Works**
+- Real system notifications through the service worker (`registration.showNotification`) while StudyOS is
+  running — foreground, or alive in the background — including tap-to-open on the right page.
+- Catch-up on resume (`visibilitychange` / `focus` / `pageshow` / service worker ready): a reminder that is
+  due *right now* fires; one whose moment has passed (class already started) never does.
+- Each reminder id fires once (persistent ledger, 7-day TTL, cross-tab lock, notification `tag`), and is only
+  recorded after it was actually delivered.
+- Settings → Reminders: Allow Notifications, Test Notification, and Notification Diagnostics.
+
+**Cannot (without a server)**
+- A browser/PWA cannot run code at a future time once the page is closed or suspended by the OS. Timers are
+  frozen in the background, so an exact "7:45 AM" alert with the app fully closed needs **Web Push**
+  (a push server sending a message at that time).
+- iPhone: notifications only work for the app **added to the Home Screen** (iOS 16.4+).
+
+**Adding Web Push later:** `public/sw.js` already has a `push` handler expecting `{title, body, href, tag}`.
+You would add a push subscription (VAPID) in the page and a small server that sends at reminder time.
+
+## Icons
+
+`python3 scripts/make_icons.py` (Pillow) regenerates every icon in `public/`: `icon-192/512` (any),
+`icon-maskable-192/512`, `apple-touch-icon`, `favicon.ico` / `favicon-32`, and `badge-96` (monochrome).

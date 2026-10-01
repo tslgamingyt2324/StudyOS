@@ -6,6 +6,7 @@ import { ClassSchedule, Course, Grade } from "@/types";
 import { useCourses } from "@/hooks/useCourses";
 import { useDraft } from "@/hooks/useDraft";
 import { cn } from "@/lib/utils";
+import { defaultEndTime, isValidTime } from "@/lib/classTime";
 import { Field, ToggleRow } from "@/components/ui";
 import FormModal from "@/components/forms/FormModal";
 
@@ -21,6 +22,12 @@ export default function CourseForm({ open, onClose, initial }: { open: boolean; 
   const { semesters, currentSemester } = useCourses();
   const { draft, set } = useDraft<Course>(open, initial ?? blank(currentSemester?.id));
 
+  // Changing the start time keeps the standard 90-minute length unless the user already chose a custom end.
+  const setStart = (i: number, startTime: string) => {
+    const b = draft.schedule[i];
+    const followsDefault = !b.endTime || b.endTime === defaultEndTime(b.startTime);
+    setBlock(i, { startTime, ...(followsDefault && isValidTime(startTime) ? { endTime: defaultEndTime(startTime) } : {}) });
+  };
   const setBlock = (i: number, p: Partial<ClassSchedule>) => set("schedule", draft.schedule.map((b, j) => (j === i ? { ...b, ...p } : b)));
   const toggleDay = (i: number, day: string) => {
     const b = draft.schedule[i];
@@ -38,7 +45,8 @@ export default function CourseForm({ open, onClose, initial }: { open: boolean; 
         if (!draft.semesterId) return "Choose a semester. Add one first from Academics → Degree Planner if the list is empty.";
         for (const b of draft.schedule) {
           if (b.days.length === 0) return "Each class time needs at least one day selected.";
-          if (b.endTime <= b.startTime) return "Class end time must be after its start time.";
+          // A blank end time is allowed — it means the standard 90-minute class.
+          if ((b.endTime || defaultEndTime(b.startTime)) <= b.startTime) return "Class end time must be after its start time.";
         }
         const code = draft.code.trim().toUpperCase();
         const dupe = await db.courses.where({ semesterId: draft.semesterId, code }).first();
@@ -46,6 +54,7 @@ export default function CourseForm({ open, onClose, initial }: { open: boolean; 
         const hasBase = base.present + base.absent + base.excused > 0;
         const row: Course = {
           ...draft, code, title: draft.title.trim(),
+          schedule: draft.schedule.map((b) => ({ ...b, endTime: b.endTime || defaultEndTime(b.startTime) })),
           status: draft.grade ? "Completed" : draft.status === "Planned" ? "Planned" : "In Progress",
           attendanceBaseline: hasBase ? base : undefined,
           requiredAttendance: draft.requiredAttendance || undefined,
@@ -79,7 +88,7 @@ export default function CourseForm({ open, onClose, initial }: { open: boolean; 
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <span className="label !mb-0">Weekly class times</span>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => set("schedule", [...draft.schedule, { days: [], startTime: "09:00", endTime: "10:30" }])}><Plus size={14} /> Add time</button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => set("schedule", [...draft.schedule, { days: [], startTime: "09:00", endTime: defaultEndTime("09:00") }])}><Plus size={14} /> Add time</button>
         </div>
         {draft.schedule.length === 0 && <p className="text-xs text-ink-muted">No class times yet — add one so this course appears on your schedule and calendar.</p>}
         {draft.schedule.map((b, i) => (
@@ -91,7 +100,7 @@ export default function CourseForm({ open, onClose, initial }: { open: boolean; 
               ))}
             </div>
             <div className="flex items-center gap-2">
-              <input aria-label="Start time" type="time" className="input" value={b.startTime} onChange={(e) => setBlock(i, { startTime: e.target.value })} />
+              <input aria-label="Start time" type="time" className="input" value={b.startTime} onChange={(e) => setStart(i, e.target.value)} />
               <span className="text-ink-muted">–</span>
               <input aria-label="End time" type="time" className="input" value={b.endTime} onChange={(e) => setBlock(i, { endTime: e.target.value })} />
               <button type="button" className="icon-btn" aria-label="Remove class time" onClick={() => set("schedule", draft.schedule.filter((_, j) => j !== i))}><X size={16} /></button>

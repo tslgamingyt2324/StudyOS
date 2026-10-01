@@ -4,7 +4,8 @@ import { ReactNode } from "react";
 import { AlertTriangle, ChevronRight, Flame, Info, Lightbulb, Target, UserCheck, StickyNote, Map, Clock } from "lucide-react";
 import type { useDashboard } from "@/hooks/useDashboard";
 import { Badge, Progress } from "@/components/ui";
-import { cn, deadlineLabel, formatCountdown, formatTime12 } from "@/lib/utils";
+import { cn, deadlineLabel, formatCountdown } from "@/lib/utils";
+import { classPhase, formatClassRange } from "@/lib/classTime";
 import { formatHours, formatMinutes, shortDate, daysBetween, parseKey } from "@/lib/dates";
 import { DashboardWidgetId } from "@/types";
 
@@ -53,7 +54,6 @@ function Alerts({ d }: { d: Data }) {
 }
 
 function Today({ d }: { d: Data }) {
-  const nowMin = d.now.getHours() * 60 + d.now.getMinutes();
   return (
     <Card title="Today" href="/planner/schedule" linkLabel="Schedule">
       {d.next && (
@@ -61,7 +61,7 @@ function Today({ d }: { d: Data }) {
           <p className="text-[11px] font-semibold uppercase tracking-wide text-accent">
             Next class{d.next.dayOffset === 0 ? "" : d.next.dayOffset === 1 ? " · tomorrow" : ` · ${d.next.dayName}`}
           </p>
-          <p className="text-sm font-medium">{d.next.course.code} at {formatTime12(d.next.sched.startTime)} · {d.next.course.room ?? "Room TBA"}</p>
+          <p className="text-sm font-medium">{d.next.course.code} · {formatClassRange(d.next.sched)} · {d.next.course.room ?? "Room TBA"}</p>
           <p className="flex items-center gap-1 text-xs text-ink-muted"><Clock size={12} aria-hidden="true" /> in {formatCountdown(d.next.minutesUntil)}</p>
         </div>
       )}
@@ -70,15 +70,12 @@ function Today({ d }: { d: Data }) {
       ) : (
         <ul className="mt-1 divide-y divide-border">
           {d.today.map(({ course, sched }, i) => {
-            const [h, m] = sched.startTime.split(":").map(Number);
-            const [eh, em] = sched.endTime.split(":").map(Number);
-            const over = eh * 60 + em <= nowMin, live = h * 60 + m <= nowMin && nowMin < eh * 60 + em;
+            const over = classPhase(sched, d.now) === "ended", live = classPhase(sched, d.now) === "current";
             return (
               <li key={i}>
                 <Link href={`/academics/courses/${course.id}`} className={cn("row-link", over && "opacity-55")}>
                   <span className="flex items-center gap-3">
-                    <span className="w-[68px] shrink-0 text-sm font-semibold tabular">{formatTime12(sched.startTime)}</span>
-                    <span><span className="block text-sm font-medium">{course.code} · {course.title}</span><span className="block text-xs text-ink-muted">{course.room ?? "Room TBA"}</span></span>
+                    <span className="min-w-0"><span className="block text-xs font-semibold tabular text-ink-muted">{formatClassRange(sched)}</span><span className="block truncate text-sm font-medium">{course.code} · {course.title}</span><span className="block text-xs text-ink-muted">{course.room ?? "Room TBA"}</span></span>
                   </span>
                   {live && <Badge tone="good">Now</Badge>}
                 </Link>

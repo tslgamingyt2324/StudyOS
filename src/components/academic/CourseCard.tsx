@@ -4,7 +4,7 @@ import { ChevronRight } from "lucide-react";
 import { Course } from "@/types";
 import { AttendanceStats } from "@/lib/attendance";
 import { Badge } from "@/components/ui";
-import { formatTime12 } from "@/lib/utils";
+import { formatClassRange } from "@/lib/classTime";
 import { gradeColor } from "@/lib/gpa";
 import { WEEKDAY_SHORT, WEEKDAY_LONG } from "@/lib/stats";
 
@@ -29,7 +29,7 @@ export default function CourseCard({ course, attendance, studyLabel }: { course:
       </div>
       <div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-muted">
         <span>{course.credits} cr</span>
-        {first && <span>{days} · {formatTime12(first.startTime)}</span>}
+        {first && <span>{days} · {formatClassRange(first)}</span>}
         {attendance?.percentage != null && <span className={attendance.status === "risk" ? "font-semibold text-bad" : attendance.status === "warning" ? "text-warn" : ""}>Attendance {attendance.percentage.toFixed(0)}%</span>}
         {studyLabel && <span>{studyLabel} studied</span>}
       </div>

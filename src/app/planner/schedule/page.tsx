@@ -2,7 +2,10 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useState } from "react";
 import { db } from "@/db/db";
-import { weeklySchedule, nextClassAcrossWeek, formatCountdown, formatTime12, todayName, timeToMinutes, cn } from "@/lib/utils";
+import { weeklySchedule, nextClassAcrossWeek, formatCountdown, todayName, cn } from "@/lib/utils";
+import { classPhase, classEndTime, formatClassRange } from "@/lib/classTime";
+import { formatClock } from "@/lib/dates";
+import { useNow } from "@/hooks/useNow";
 
 export default function SchedulePage() {
   const courses = useLiveQuery(() => db.courses.toArray()) ?? [];
@@ -19,15 +22,12 @@ export default function SchedulePage() {
     return () => clearInterval(id);
   }, []);
 
-  const now = new Date();
+  const now = useNow();
   const today = todayName(now);
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
   const { order, map } = weeklySchedule(activeCourses, weekStartsOn);
   const next = nextClassAcrossWeek(activeCourses, now);
 
-  const currentClass = (map.get(today) ?? []).find(
-    (item) => timeToMinutes(item.sched.startTime) <= nowMinutes && nowMinutes < timeToMinutes(item.sched.endTime)
-  );
+  const currentClass = (map.get(today) ?? []).find((item) => classPhase(item.sched, now) === "current");
 
   return (
     <div className="space-y-4">
@@ -37,7 +37,7 @@ export default function SchedulePage() {
         <div className="card p-4 bg-good/10 border-good/30">
           <p className="text-[11px] font-semibold text-good">IN CLASS NOW</p>
           <p className="font-semibold">{currentClass.course.code} · {currentClass.course.title}</p>
-          <p className="text-xs text-ink-faint">Until {formatTime12(currentClass.sched.endTime)} · {currentClass.course.room ?? "Room TBA"}</p>
+          <p className="text-xs text-ink-faint">{formatClassRange(currentClass.sched)} · {currentClass.course.room ?? "Room TBA"}</p>
         </div>
       ) : next ? (
         <div className="card p-4 bg-accent-soft">
@@ -46,7 +46,7 @@ export default function SchedulePage() {
           </p>
           <p className="font-semibold">{next.course.code} · {next.course.title}</p>
           <p className="text-xs text-ink-faint">
-            {formatTime12(next.sched.startTime)} · {next.course.room ?? "Room TBA"} · in {formatCountdown(next.minutesUntil)}
+            {formatClassRange(next.sched)} · {next.course.room ?? "Room TBA"} · in {formatCountdown(next.minutesUntil)}
           </p>
         </div>
       ) : (
@@ -69,15 +69,16 @@ export default function SchedulePage() {
                 <div className="divide-y divide-border">
                   {classes.map((item, i) => (
                     <div key={i} className="flex items-center gap-3 p-3">
-                      <div className="w-20 shrink-0 text-xs font-semibold text-ink-muted">
-                        {formatTime12(item.sched.startTime)}
+                      <div className="w-[5.5rem] shrink-0 text-xs font-semibold leading-tight text-ink-muted tabular">
+                        <span className="block">{formatClock(item.sched.startTime)}</span>
+                        <span className="block font-normal text-ink-faint">{formatClock(classEndTime(item.sched))}</span>
                       </div>
                       <div className="flex-1">
                         <p className="text-sm font-medium">
                           {item.course.code} · {item.course.title}
                           {item.course.isRetake && <span className="ml-1.5 rounded bg-warn/15 px-1.5 py-0.5 text-[9px] font-semibold text-warn align-middle">RETAKE</span>}
                         </p>
-                        <p className="text-xs text-ink-faint">{item.course.room ?? "Room TBA"} · until {formatTime12(item.sched.endTime)}</p>
+                        <p className="text-xs text-ink-faint">{item.course.room ?? "Room TBA"}</p>
                       </div>
                     </div>
                   ))}
